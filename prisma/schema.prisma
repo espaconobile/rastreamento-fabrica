@@ -1,0 +1,82 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Um projeto = um arquivo de etiquetas importado do Promob (pode conter varios ambientes/comodos).
+model Projeto {
+  id                String   @id @default(cuid())
+  clienteNome       String
+  nomeArquivoOrigem String
+  dataImportacao    DateTime @default(now())
+  lotes             Lote[]
+}
+
+// Um lote = todas as pecas de um ambiente (comodo) dentro de um projeto.
+// Ex: "1_COZINHAEAREA" do projeto do cliente Ademir.
+model Lote {
+  id        String   @id @default(cuid())
+  projetoId String
+  projeto   Projeto  @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+  ambiente  String
+  createdAt DateTime @default(now())
+  pecas     Peca[]
+
+  @@unique([projetoId, ambiente])
+}
+
+model Peca {
+  id                String     @id @default(cuid())
+  loteId            String
+  lote              Lote       @relation(fields: [loteId], references: [id], onDelete: Cascade)
+  codigo            String // valor codificado no codigo de barras da etiqueta (ID unico da peca)
+  chapaNum          Int? // numero da chapa no nesting (Ch)
+  posicaoNoNesting  Int? // posicao da peca na chapa (Pc)
+  moduloCodigo      String // codigo do modulo/armario (Modulo)
+  // numero sequencial da pilha de separacao (1, 2, 3...) dentro do lote, uma por moduloCodigo
+  // distinto, na ordem em que os modulos aparecem no PDF. O @default(0) e so uma rede de
+  // seguranca para a migration; o codigo sempre grava o valor real explicitamente.
+  pilha             Int        @default(0)
+  descricaoPeca     String // nome da peca (Peca), ex: !LAT_ESQ
+  comprimento       Float?
+  profundidade      Float?
+  espessura         Float?
+  chapaMaterial     String? // ex: "Itapua 15mm"
+  createdAt         DateTime   @default(now())
+  bipagens          Bipagem[]
+
+  @@unique([loteId, codigo])
+  @@index([codigo])
+}
+
+// Etapas fixas do fluxo de producao (seed: Corte CNC, Coladeira de Bordas, Separacao/Triagem Final).
+// Extensivel: novas etapas podem ser inseridas sem alterar o schema.
+model Etapa {
+  id       String    @id @default(cuid())
+  nome     String    @unique
+  ordem    Int       @unique
+  // Se true, a bipagem nesta etapa mostra em destaque em qual pilha (modulo) a peca deve ser
+  // colocada. Hoje so a etapa de Separacao usa isso.
+  usaPilha Boolean   @default(false)
+  bipagens Bipagem[]
+}
+
+// Registro de cada bipagem (scan) de uma peca em uma etapa.
+model Bipagem {
+  id          String   @id @default(cuid())
+  pecaId      String
+  peca        Peca     @relation(fields: [pecaId], references: [id], onDelete: Cascade)
+  etapaId     String
+  etapa       Etapa    @relation(fields: [etapaId], references: [id])
+  estacaoNome String // nome/identificacao da estacao/coletor que fez a leitura
+  // status: "OK" | "ALERTA_FORA_DE_ORDEM" | "ALERTA_DUPLICADO"
+  status      String
+  createdAt   DateTime @default(now())
+
+  @@index([pecaId])
+  @@index([etapaId])
+}
