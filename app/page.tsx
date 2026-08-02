@@ -2,6 +2,7 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { calcularProgressoLote } from "@/lib/loteProgress";
 import ExcluirLoteButton from "@/app/components/ExcluirLoteButton";
+import AutoRefresh from "@/app/components/AutoRefresh";
 
 export default async function HomePage() {
   const etapas = await db.etapa.findMany({ orderBy: { ordem: "asc" } });
@@ -21,6 +22,7 @@ export default async function HomePage() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 lg:max-w-6xl lg:px-10 lg:py-14">
+      <AutoRefresh />
       <h1 className="text-2xl font-semibold text-zinc-900 lg:text-5xl">Lotes em produção</h1>
 
       {lotes.length === 0 && (

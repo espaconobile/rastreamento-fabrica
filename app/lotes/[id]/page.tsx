@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { calcularProgressoLote } from "@/lib/loteProgress";
 import ExcluirLoteButton from "@/app/components/ExcluirLoteButton";
+import AutoRefresh from "@/app/components/AutoRefresh";
 
 export default async function LoteDetailPage({
   params,
@@ -44,6 +45,7 @@ export default async function LoteDetailPage({
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
+      <AutoRefresh />
       <h1 className="text-2xl font-semibold text-zinc-900">
         {lote.projeto.clienteNome} · {lote.ambiente}
       </h1>
