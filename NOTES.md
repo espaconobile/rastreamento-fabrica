@@ -69,6 +69,18 @@ que motivou o projeto (peças se perdendo entre um processo e outro por falta de
 - Existem páginas de **"Sobra de Material"** misturadas no mesmo PDF (etiquetas de retalho de
   chapa, não são peças) — são ignoradas explicitamente (`SOBRA_RE`).
 - `pdf-parse` é a **v2** (`PDFParse` class), API bem diferente da v1 clássica (`pdf(buffer)`).
+- **Gotcha de produção (Vercel)**: `pdf-parse`/`pdfjs-dist` esperam `DOMMatrix`/`Path2D`/
+  `ImageData` (APIs de canvas de navegador) mesmo só extraindo texto — em Node/serverless isso
+  não existe, e dava `ReferenceError: DOMMatrix is not defined` só em produção (não reproduzia
+  num build local, aparentemente por causa de uma diferença de resolução ESM/CJS do pacote:
+  a build CJS do `pdf-parse` configura esse polyfill, a build ESM não). Corrigido em
+  `lib/pdfjsPolyfills.ts`, importado como primeira linha de `lib/parseEtiquetas.ts` (a ordem
+  importa — precisa carregar antes do `import "pdf-parse"` pra definir as globais a tempo),
+  usando `@napi-rs/canvas` (já dependência transitiva do `pdf-parse`, não precisou instalar
+  nada novo). Também precisou marcar `@napi-rs/canvas` em `serverExternalPackages` no
+  `next.config.ts`, porque o Turbopack não consegue empacotar o binário nativo dela num chunk
+  ESM. Se atualizar `pdf-parse`/`pdfjs-dist`, testar upload de PDF em produção de novo antes de
+  dar como certo — esse tipo de erro só aparece lá.
 - **Bug de bundler**: sob Turbopack (Next.js), a resolução automática do worker do `pdfjs-dist`
   falha (tenta importar um caminho dentro de `.next/` que não existe). Corrigido apontando
   manualmente `PDFParse.setWorker(...)` para o arquivo real dentro de `node_modules/pdfjs-dist`
