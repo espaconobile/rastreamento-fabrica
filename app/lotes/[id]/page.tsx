@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { calcularProgressoLote } from "@/lib/loteProgress";
+import ExcluirLoteButton from "@/app/components/ExcluirLoteButton";
 
 export default async function LoteDetailPage({
   params,
@@ -24,7 +24,12 @@ export default async function LoteDetailPage({
   if (!lote) notFound();
 
   const etapas = await db.etapa.findMany({ orderBy: { ordem: "asc" } });
-  const progresso = calcularProgressoLote(lote.pecas, etapas);
+  // Etapas de excecao (ex: "Peca Danificada") ficam de fora dos calculos de progresso normais e
+  // da "ultima etapa" usada pra decidir se uma pilha esta completa — ver app/page.tsx para a
+  // mesma decisao no dashboard.
+  const etapasProducao = etapas.filter((e) => !e.ehExcecao);
+  const excecaoIds = new Set(etapas.filter((e) => e.ehExcecao).map((e) => e.id));
+  const progresso = calcularProgressoLote(lote.pecas, etapasProducao);
 
   // Agrupa as pecas por pilha (1 pilha = 1 modulo) para a conferencia "modulo por modulo" e
   // para o mapa de pilhas que pode ser impresso/afixado na area de separacao.
@@ -35,19 +40,22 @@ export default async function LoteDetailPage({
     pilhas.set(peca.pilha, lista);
   }
   const gruposOrdenados = [...pilhas.entries()].sort((a, b) => a[0] - b[0]);
-  const ultimaEtapa = etapas[etapas.length - 1];
+  const ultimaEtapa = etapasProducao[etapasProducao.length - 1];
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
-      <Link href="/" className="text-sm text-zinc-500 underline">
-        ← todos os lotes
-      </Link>
-      <h1 className="mt-2 text-2xl font-semibold text-zinc-900">
+      <h1 className="text-2xl font-semibold text-zinc-900">
         {lote.projeto.clienteNome} · {lote.ambiente}
       </h1>
-      <p className="text-sm text-zinc-500">
-        {lote.pecas.length} peças · {pilhas.size} pilhas (módulos)
-      </p>
+      <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-zinc-500">
+          {lote.pecas.length} peças · {pilhas.size} pilhas (módulos)
+        </p>
+        <ExcluirLoteButton
+          loteId={lote.id}
+          nomeLote={`${lote.projeto.clienteNome} · ${lote.ambiente}`}
+        />
+      </div>
 
       <div className="mt-4 flex flex-wrap gap-6">
         {progresso.map((et) => (
@@ -78,14 +86,22 @@ export default async function LoteDetailPage({
               p.bipagens.some((b) => b.etapaId === ultimaEtapa?.id)
             ).length;
             const pilhaCompleta = concluidasNaUltimaEtapa === pecasDaPilha.length;
+            // Pecas soltas (modulos com uma unica peca) dividem uma pilha comum mesmo vindo de
+            // moduloCodigo diferentes entre si (ver app/api/importar/route.ts) — nesse caso "módulo
+            // X" seria enganoso, entao identificamos o grupo por quantos modulos distintos ele tem.
+            const modulosDistintos = new Set(pecasDaPilha.map((p) => p.moduloCodigo));
+            const rotuloModulo =
+              modulosDistintos.size === 1
+                ? `módulo ${pecasDaPilha[0].moduloCodigo}`
+                : `avulsas · ${modulosDistintos.size} módulos`;
 
             return (
-              <tbody key={pilha} className="divide-y divide-zinc-100 border-t-2 border-zinc-900">
+              <tbody key={pilha} className="divide-y divide-zinc-100 border-t-2 border-blue-200">
                 <tr>
-                  <td colSpan={2 + etapas.length} className="bg-zinc-900 px-3 py-1.5 text-white">
+                  <td colSpan={2 + etapas.length} className="bg-blue-600 px-3 py-1.5 text-white">
                     <span className="text-sm font-semibold">Pilha {pilha}</span>
-                    <span className="ml-2 text-xs text-zinc-300">
-                      módulo {pecasDaPilha[0].moduloCodigo} · {pecasDaPilha.length} peças
+                    <span className="ml-2 text-xs text-blue-100">
+                      {rotuloModulo} · {pecasDaPilha.length} peças
                       {ultimaEtapa && (
                         <>
                           {" "}
@@ -98,9 +114,15 @@ export default async function LoteDetailPage({
                 </tr>
                 {pecasDaPilha.map((peca) => {
                   const etapasFeitas = new Set(peca.bipagens.map((b) => b.etapaId));
-                  const temAlerta = peca.bipagens.some((b) => b.status !== "OK");
+                  const danificada = peca.bipagens.some((b) => excecaoIds.has(b.etapaId));
+                  const temAlerta =
+                    !danificada &&
+                    peca.bipagens.some((b) => b.status !== "OK" && !excecaoIds.has(b.etapaId));
                   return (
-                    <tr key={peca.id} className={temAlerta ? "bg-amber-50" : undefined}>
+                    <tr
+                      key={peca.id}
+                      className={danificada ? "bg-rose-50" : temAlerta ? "bg-amber-50" : undefined}
+                    >
                       <td className="px-3 py-2 text-zinc-600">{peca.descricaoPeca}</td>
                       <td className="px-3 py-2 text-zinc-500">
                         {peca.comprimento && peca.profundidade
@@ -110,7 +132,11 @@ export default async function LoteDetailPage({
                       {etapas.map((et) => (
                         <td key={et.id} className="px-3 py-2 text-center">
                           {etapasFeitas.has(et.id) ? (
-                            <span className="text-green-600">✓</span>
+                            et.ehExcecao ? (
+                              <span className="font-semibold text-rose-600">⚠</span>
+                            ) : (
+                              <span className="text-green-600">✓</span>
+                            )
                           ) : (
                             <span className="text-zinc-300">—</span>
                           )}

@@ -56,13 +56,18 @@ model Peca {
 // Etapas fixas do fluxo de producao (seed: Corte CNC, Coladeira de Bordas, Separacao/Triagem Final).
 // Extensivel: novas etapas podem ser inseridas sem alterar o schema.
 model Etapa {
-  id       String    @id @default(cuid())
-  nome     String    @unique
-  ordem    Int       @unique
+  id        String    @id @default(cuid())
+  nome      String    @unique
+  ordem     Int       @unique
   // Se true, a bipagem nesta etapa mostra em destaque em qual pilha (modulo) a peca deve ser
   // colocada. Hoje so a etapa de Separacao usa isso.
-  usaPilha Boolean   @default(false)
-  bipagens Bipagem[]
+  usaPilha  Boolean   @default(false)
+  // Se true, esta etapa nao e uma etapa sequencial de producao (Corte/Coladeira/Separacao) e sim
+  // uma marcacao de excecao (hoje: "Peca Danificada") que pode ser bipada a qualquer momento do
+  // fluxo. Etapas de excecao nao exigem que a etapa anterior tenha sido feita, e sao ignoradas ao
+  // procurar "a etapa anterior obrigatoria" de qualquer outra etapa (ver app/api/bipar/route.ts).
+  ehExcecao Boolean   @default(false)
+  bipagens  Bipagem[]
 }
 
 // Registro de cada bipagem (scan) de uma peca em uma etapa.
@@ -72,8 +77,8 @@ model Bipagem {
   peca        Peca     @relation(fields: [pecaId], references: [id], onDelete: Cascade)
   etapaId     String
   etapa       Etapa    @relation(fields: [etapaId], references: [id])
-  estacaoNome String // nome/identificacao da estacao/coletor que fez a leitura
-  // status: "OK" | "ALERTA_FORA_DE_ORDEM" | "ALERTA_DUPLICADO"
+  clienteNome String // cliente selecionado pelo operador no momento da bipagem
+  // status: "OK" | "ALERTA_FORA_DE_ORDEM" | "ALERTA_DUPLICADO" | "EXCECAO_REGISTRADA"
   status      String
   createdAt   DateTime @default(now())
 

@@ -69,12 +69,25 @@ export async function POST(request: NextRequest) {
       data: { projetoId: projeto.id, ambiente },
     });
 
-    // Cada modulo distinto vira uma pilha de separacao, numerada na ordem em que os modulos
-    // aparecem no PDF (mesma ordem em que as pecas saem cortadas/impressas).
-    const pilhaPorModulo = new Map<string, number>();
+    // Um modulo so tem sentido de agrupamento fisico quando tem mais de uma peca; quando o
+    // modulo tem uma unica peca no lote, ela nao esta de fato vinculada a nenhuma outra peca
+    // (peca "solta"), entao todas as pecas soltas do lote (de modulos diferentes) vao para uma
+    // unica pilha comum de avulsas, em vez de gerar uma pilha por peca no chao de fabrica.
+    const contagemPorModulo = new Map<string, number>();
     for (const peca of pecasDoLote) {
-      if (!pilhaPorModulo.has(peca.moduloCodigo)) {
-        pilhaPorModulo.set(peca.moduloCodigo, pilhaPorModulo.size + 1);
+      contagemPorModulo.set(peca.moduloCodigo, (contagemPorModulo.get(peca.moduloCodigo) ?? 0) + 1);
+    }
+    const CHAVE_AVULSAS = "__AVULSAS__";
+    const chavePilha = (peca: PecaExtraida) =>
+      contagemPorModulo.get(peca.moduloCodigo) === 1 ? CHAVE_AVULSAS : peca.moduloCodigo;
+
+    // Cada modulo distinto (e o grupo de avulsas) vira uma pilha de separacao, numerada na ordem
+    // em que aparecem no PDF (mesma ordem em que as pecas saem cortadas/impressas).
+    const pilhaPorChave = new Map<string, number>();
+    for (const peca of pecasDoLote) {
+      const chave = chavePilha(peca);
+      if (!pilhaPorChave.has(chave)) {
+        pilhaPorChave.set(chave, pilhaPorChave.size + 1);
       }
     }
 
@@ -88,7 +101,7 @@ export async function POST(request: NextRequest) {
             chapaNum: peca.chapaNum,
             posicaoNoNesting: peca.posicaoNoNesting,
             moduloCodigo: peca.moduloCodigo,
-            pilha: pilhaPorModulo.get(peca.moduloCodigo)!,
+            pilha: pilhaPorChave.get(chavePilha(peca))!,
             descricaoPeca: peca.descricaoPeca,
             comprimento: peca.comprimento,
             profundidade: peca.profundidade,
@@ -106,7 +119,7 @@ export async function POST(request: NextRequest) {
       ambiente,
       total: pecasDoLote.length - ignoradas,
       ignoradas,
-      pilhas: pilhaPorModulo.size,
+      pilhas: pilhaPorChave.size,
     });
   }
 

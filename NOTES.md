@@ -87,14 +87,40 @@ que motivou o projeto (peças se perdendo entre um processo e outro por falta de
   bipada duas vezes na mesma etapa: o sistema registra e avisa (cor/som), mas sempre grava a
   bipagem — nunca impede o operador de prosseguir. Decisão explícita do usuário para não travar a
   produção por exceções legítimas.
-- **3 etapas hoje**: Corte CNC → Coladeira de Bordas → Separação (a seccionadora de cortes
-  avulsos ficou de fora por enquanto). A etapa 3 se chamava "Separação/Triagem Final" e foi
+- **3 etapas de produção hoje**: Corte CNC → Coladeira de Bordas → Separação (a seccionadora de
+  cortes avulsos ficou de fora por enquanto). A etapa 3 se chamava "Separação/Triagem Final" e foi
   renomeada para só "Separação" — o `prisma/seed.ts` faz upsert pela `ordem` (não pelo `nome`)
   exatamente pra permitir renomear uma etapa existente sem duplicá-la nem perder o histórico de
   bipagens (que referencia o `id`, que não muda). Uma etapa "Expedição" foi cogitada como próxima
   depois da Separação, mas não foi criada ainda (o usuário preferiu deixar só mencionado por
-  enquanto — pedir explicitamente quando for a hora). Novas etapas não exigem mudança de código —
-  só inserir linha na tabela `Etapa` com o `ordem` certo (e `usaPilha` se for o caso).
+  enquanto — pedir explicitamente quando for a hora). Novas etapas de produção não exigem mudança
+  de código — só inserir linha na tabela `Etapa` com o `ordem` certo (e `usaPilha` se for o caso).
+- **Etapas de exceção (`Etapa.ehExcecao`)**: além das etapas sequenciais de produção, existe um
+  segundo tipo de etapa que não representa um passo do fluxo — hoje só "Peça Danificada" (ordem
+  4), pra marcar peças que vão precisar ser refeitas. Motivação do usuário: no chão de fábrica,
+  peça quebrada/danificada pode ser encontrada em qualquer ponto do processo, não só depois da
+  Separação — não faz sentido exigir que ela já tenha passado pelas etapas anteriores pra poder
+  marcar o defeito.
+  - Uma etapa com `ehExcecao=true` pode ser bipada a qualquer momento: `app/api/bipar/route.ts`
+    não exige etapa anterior pra ela (`etapaAnteriorObrigatoria` vira `null`). Bipar uma peça
+    numa etapa de exceção gera um status novo, `EXCECAO_REGISTRADA` (distinto de `OK`), pra não
+    parecer "sucesso normal" — a cor na tela de bipagem é rosa/vinho, diferente do verde de OK e
+    do amarelo dos alertas de fora-de-ordem/duplicado.
+  - Etapas de exceção também são ignoradas ao calcular **qual é a etapa anterior obrigatória de
+    qualquer outra etapa**: em vez de exigir exatamente `ordem - 1` (que quebraria se uma etapa de
+    exceção fosse inserida no meio da sequência), a busca é "a etapa de produção mais próxima com
+    `ordem` menor, ignorando exceções" (`findFirst` com `ordem: { lt }` + `ehExcecao: false`,
+    ordenado desc). Isso também deixa a sequência mais tolerante a gaps no `ordem` no geral.
+  - Etapas de exceção **ficam de fora** das barras de progresso do Dashboard e do resumo no topo
+    do detalhe do lote (`etapasProducao = etapas.filter(e => !e.ehExcecao)`) — não fazem sentido
+    como "% completo", já que o objetivo é ter zero peças nelas, não 100%. Em vez disso, viram um
+    aviso `⚠ N danificada(s)` ao lado da contagem de peças do lote, e uma coluna própria na tabela
+    de peças do detalhe do lote (peça marcada mostra `⚠` em vez de `✓`, e a linha inteira fica com
+    fundo rosa em vez do amarelo usado pros alertas de fora-de-ordem/duplicado).
+  - Ao adicionar `ultimaEtapa` (usada em `app/lotes/[id]/page.tsx` pra decidir se uma pilha está
+    "completa"), tome cuidado pra sempre pegar a última etapa de **produção** (`etapasProducao`),
+    não a última etapa por `ordem` no array bruto — senão vira "Peça Danificada" já que ela tem o
+    maior `ordem`, e a lógica de pilha completa quebra silenciosamente.
 
 ## Compatibilidade com iOS (Safari)
 

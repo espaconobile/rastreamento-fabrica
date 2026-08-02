@@ -12,11 +12,12 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* App sempre no tema claro: o app inteiro foi desenhado com fundo branco/cinza claro e texto
+   escuro. Sem isso, celulares com modo escuro do sistema ligado herdavam um fundo quase preto
+   (regra antiga de "prefers-color-scheme: dark" do boilerplate do Next.js) enquanto o resto dos
+   componentes continuava usando cores pensadas pra fundo claro, resultando em baixo contraste. */
+html {
+  color-scheme: light;
 }
 
 body {

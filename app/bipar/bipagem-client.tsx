@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useRef, useState, type SVGProps } from "react";
 
 // Carrega o zbar.wasm de um CDN em vez de depender do bundler (Turbopack) posicionar o arquivo
 // .wasm no lugar certo — mais confiavel entre ambientes. Usa a mesma versao instalada no package.json.
@@ -33,7 +32,13 @@ interface PecaInfo {
   chapaMaterial: string | null;
 }
 
-type FeedbackTipo = "OK" | "ALERTA_DUPLICADO" | "ALERTA_FORA_DE_ORDEM" | "NAO_ENCONTRADA" | "ERRO";
+type FeedbackTipo =
+  | "OK"
+  | "ALERTA_DUPLICADO"
+  | "ALERTA_FORA_DE_ORDEM"
+  | "NAO_ENCONTRADA"
+  | "ERRO"
+  | "EXCECAO_REGISTRADA";
 
 interface ProgressoPilha {
   concluidas: number;
@@ -47,12 +52,95 @@ interface Feedback {
   progressoPilha?: ProgressoPilha;
 }
 
+// Em telas de celular usamos fundo claro (mais legivel de perto); a partir de "lg" (monitor de
+// producao, visto de longe) trocamos para fundo saturado com texto branco, que mantem contraste
+// alto mesmo a distancia e sob iluminacao de chao de fabrica.
 const CORES: Record<FeedbackTipo, string> = {
-  OK: "border-green-300 bg-green-50 text-green-900",
-  ALERTA_DUPLICADO: "border-amber-300 bg-amber-50 text-amber-900",
-  ALERTA_FORA_DE_ORDEM: "border-amber-300 bg-amber-50 text-amber-900",
-  NAO_ENCONTRADA: "border-red-300 bg-red-50 text-red-900",
-  ERRO: "border-red-300 bg-red-50 text-red-900",
+  OK: "border-green-300 bg-green-50 text-green-900 lg:border-green-700 lg:bg-green-600 lg:text-white",
+  ALERTA_DUPLICADO:
+    "border-amber-300 bg-amber-50 text-amber-900 lg:border-amber-600 lg:bg-amber-400 lg:text-amber-950",
+  ALERTA_FORA_DE_ORDEM:
+    "border-amber-300 bg-amber-50 text-amber-900 lg:border-amber-600 lg:bg-amber-400 lg:text-amber-950",
+  NAO_ENCONTRADA: "border-red-300 bg-red-50 text-red-900 lg:border-red-800 lg:bg-red-600 lg:text-white",
+  ERRO: "border-red-300 bg-red-50 text-red-900 lg:border-red-800 lg:bg-red-600 lg:text-white",
+  // Cor propria (rosa/vinho), diferente do verde de sucesso e do amarelo de alerta — marcar uma
+  // peca como danificada nao e um erro nem um "tudo certo", e precisa se destacar visualmente
+  // dos dois pra ninguem confundir com bipagem normal.
+  EXCECAO_REGISTRADA:
+    "border-rose-300 bg-rose-50 text-rose-900 lg:border-rose-800 lg:bg-rose-600 lg:text-white",
+};
+
+function IconeCheck(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="m8 12.5 2.5 2.5L16 9.5" />
+    </svg>
+  );
+}
+
+function IconeAlerta(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M12 3.5 21 19.5H3z" />
+      <path d="M12 9.5v4.5" />
+      <path d="M12 17h.01" />
+    </svg>
+  );
+}
+
+function IconeErro(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="m9 9 6 6M15 9 9 15" />
+    </svg>
+  );
+}
+
+function IconeCamera(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M4 8a2 2 0 0 1 2-2h1.5l1-1.5h7l1 1.5H18a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" />
+      <circle cx="12" cy="12.5" r="3.5" />
+    </svg>
+  );
+}
+
+function IconeTrocar(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M4 8h13l-3-3" />
+      <path d="M20 16H7l3 3" />
+    </svg>
+  );
+}
+
+function IconePilha(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="m12 3 9 5-9 5-9-5z" />
+      <path d="m3 13 9 5 9-5" />
+    </svg>
+  );
+}
+
+function IconeExcecao(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M6 21V4" />
+      <path d="M6 4h11l-2.5 3.5L17 11H6" />
+    </svg>
+  );
+}
+
+const ICONES_FEEDBACK: Record<FeedbackTipo, (props: SVGProps<SVGSVGElement>) => React.JSX.Element> = {
+  OK: IconeCheck,
+  ALERTA_DUPLICADO: IconeAlerta,
+  ALERTA_FORA_DE_ORDEM: IconeAlerta,
+  NAO_ENCONTRADA: IconeErro,
+  ERRO: IconeErro,
+  EXCECAO_REGISTRADA: IconeExcecao,
 };
 
 // iOS/Safari só libera o AudioContext se ele for criado (ou retomado) dentro de um gesto do
@@ -87,7 +175,7 @@ function tocarBeep(ctx: AudioContext | null, tipo: FeedbackTipo) {
 
     if (tipo === "OK") {
       tocarTom(880, 0, 0.12);
-    } else if (tipo === "ALERTA_DUPLICADO" || tipo === "ALERTA_FORA_DE_ORDEM") {
+    } else if (tipo === "ALERTA_DUPLICADO" || tipo === "ALERTA_FORA_DE_ORDEM" || tipo === "EXCECAO_REGISTRADA") {
       tocarTom(520, 0, 0.1);
       tocarTom(520, 0.15, 0.1);
     } else {
@@ -98,8 +186,8 @@ function tocarBeep(ctx: AudioContext | null, tipo: FeedbackTipo) {
   }
 }
 
-export default function BipagemClient({ etapas }: { etapas: Etapa[] }) {
-  const [estacaoNome, setEstacaoNome] = useState("");
+export default function BipagemClient({ etapas, clientes }: { etapas: Etapa[]; clientes: string[] }) {
+  const [clienteNome, setClienteNome] = useState("");
   const [etapaId, setEtapaId] = useState("");
   const [configurando, setConfigurando] = useState(true);
   const [codigoManual, setCodigoManual] = useState("");
@@ -121,14 +209,16 @@ export default function BipagemClient({ etapas }: { etapas: Etapa[] }) {
   const audioCtxRef = useRef<AudioContext | null>(null);
 
   useEffect(() => {
-    const est = localStorage.getItem("bipagem.estacao");
+    const cli = localStorage.getItem("bipagem.cliente");
     const et = localStorage.getItem("bipagem.etapaId");
-    if (est && et && etapas.some((e) => e.id === et)) {
-      setEstacaoNome(est);
+    if (cli && et && clientes.includes(cli) && etapas.some((e) => e.id === et)) {
+      // Restaura a configuracao salva do localStorage, que so existe no cliente (nao no SSR).
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setClienteNome(cli);
       setEtapaId(et);
       setConfigurando(false);
     }
-  }, [etapas]);
+  }, [etapas, clientes]);
 
   useEffect(() => {
     if (!configurando) inputRef.current?.focus();
@@ -142,7 +232,7 @@ export default function BipagemClient({ etapas }: { etapas: Etapa[] }) {
         const res = await fetch("/api/bipar", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ codigo, etapaId, estacaoNome, loteId }),
+          body: JSON.stringify({ codigo, etapaId, clienteNome, loteId }),
         });
         const data = await res.json();
 
@@ -173,13 +263,13 @@ export default function BipagemClient({ etapas }: { etapas: Etapa[] }) {
         inputRef.current?.focus();
       }
     },
-    [etapaId, estacaoNome, enviando]
+    [etapaId, clienteNome, enviando]
   );
 
   function handleSalvarConfiguracao(e: React.FormEvent) {
     e.preventDefault();
-    if (!estacaoNome.trim() || !etapaId) return;
-    localStorage.setItem("bipagem.estacao", estacaoNome.trim());
+    if (!clienteNome || !etapaId) return;
+    localStorage.setItem("bipagem.cliente", clienteNome);
     localStorage.setItem("bipagem.etapaId", etapaId);
     setConfigurando(false);
   }
@@ -277,27 +367,36 @@ export default function BipagemClient({ etapas }: { etapas: Etapa[] }) {
 
   if (configurando) {
     return (
-      <form onSubmit={handleSalvarConfiguracao} className="flex flex-col gap-4">
-        <Link href="/" className="text-xs font-medium text-zinc-500 underline">
-          ← painel
-        </Link>
-        <h1 className="text-xl font-semibold text-zinc-900">Configurar estação</h1>
-        <label className="flex flex-col gap-1 text-sm">
-          Nome da estação
-          <input
-            value={estacaoNome}
-            onChange={(e) => setEstacaoNome(e.target.value)}
-            placeholder="Ex: CNC 1"
-            className="rounded-lg border border-zinc-300 p-3"
-            required
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          Etapa desta estação
+      <form onSubmit={handleSalvarConfiguracao} className="flex flex-col gap-4 lg:gap-6">
+        <h1 className="text-xl font-semibold text-zinc-900 lg:text-4xl">Configurar bipagem</h1>
+        {clientes.length === 0 ? (
+          <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 lg:p-5 lg:text-xl">
+            Nenhum cliente importado ainda. Importe um projeto em &quot;Importar&quot; antes de bipar.
+          </p>
+        ) : (
+          <label className="flex flex-col gap-1 text-sm lg:gap-2 lg:text-xl">
+            Cliente
+            <select
+              value={clienteNome}
+              onChange={(e) => setClienteNome(e.target.value)}
+              className="rounded-lg border border-zinc-300 p-3 lg:p-5 lg:text-2xl"
+              required
+            >
+              <option value="">Selecione...</option>
+              {clientes.map((cli) => (
+                <option key={cli} value={cli}>
+                  {cli}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <label className="flex flex-col gap-1 text-sm lg:gap-2 lg:text-xl">
+          Etapa em que a peça está
           <select
             value={etapaId}
             onChange={(e) => setEtapaId(e.target.value)}
-            className="rounded-lg border border-zinc-300 p-3"
+            className="rounded-lg border border-zinc-300 p-3 lg:p-5 lg:text-2xl"
             required
           >
             <option value="">Selecione...</option>
@@ -308,7 +407,12 @@ export default function BipagemClient({ etapas }: { etapas: Etapa[] }) {
             ))}
           </select>
         </label>
-        <button type="submit" className="rounded-lg bg-zinc-900 px-5 py-3 text-sm font-medium text-white">
+        <button
+          type="submit"
+          disabled={clientes.length === 0}
+          className="flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-3 text-sm font-medium text-white disabled:opacity-50 lg:py-6 lg:text-2xl"
+        >
+          <IconeCheck className="h-5 w-5 lg:h-8 lg:w-8" />
           Começar a bipar
         </button>
       </form>
@@ -316,32 +420,28 @@ export default function BipagemClient({ etapas }: { etapas: Etapa[] }) {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 lg:gap-6">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs uppercase tracking-wide text-zinc-500">{estacaoNome}</p>
-          <h1 className="text-xl font-semibold text-zinc-900">{etapaAtual?.nome}</h1>
+          <p className="text-xs uppercase tracking-wide text-zinc-500 lg:text-lg">{clienteNome}</p>
+          <h1 className="text-xl font-semibold text-zinc-900 lg:text-5xl">{etapaAtual?.nome}</h1>
         </div>
-        <div className="flex items-center gap-3">
-          <Link href="/" className="text-xs font-medium text-zinc-500 underline">
-            painel
-          </Link>
-          <button
-            onClick={() => setConfigurando(true)}
-            className="text-xs font-medium text-zinc-500 underline"
-          >
-            trocar estação
-          </button>
-        </div>
+        <button
+          onClick={() => setConfigurando(true)}
+          className="flex items-center gap-1 text-xs font-medium text-zinc-500 lg:gap-2 lg:text-lg"
+        >
+          <IconeTrocar className="h-4 w-4 lg:h-6 lg:w-6" />
+          trocar cliente
+        </button>
       </div>
 
       {progresso && (
-        <p className="text-sm text-zinc-600">
+        <p className="text-sm text-zinc-600 lg:text-2xl">
           {progresso.totalNaEtapa} de {progresso.totalNoLote} peças bipadas nesta etapa (lote atual)
         </p>
       )}
 
-      <form onSubmit={handleManualSubmit} className="flex gap-2">
+      <form onSubmit={handleManualSubmit} className="flex gap-2 lg:gap-3">
         <input
           ref={inputRef}
           value={codigoManual}
@@ -349,13 +449,14 @@ export default function BipagemClient({ etapas }: { etapas: Etapa[] }) {
           placeholder="Digite ou bipe o código da peça"
           inputMode="numeric"
           autoFocus
-          className="flex-1 rounded-lg border border-zinc-300 p-4 text-lg"
+          className="flex-1 rounded-lg border border-zinc-300 p-4 text-lg lg:p-7 lg:text-4xl"
         />
         <button
           type="submit"
           disabled={enviando}
-          className="rounded-lg bg-zinc-900 px-5 text-sm font-medium text-white disabled:opacity-50"
+          className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-5 text-sm font-medium text-white disabled:opacity-50 lg:gap-3 lg:px-9 lg:text-3xl"
         >
+          <IconeCheck className="h-5 w-5 lg:h-9 lg:w-9" />
           OK
         </button>
       </form>
@@ -363,33 +464,40 @@ export default function BipagemClient({ etapas }: { etapas: Etapa[] }) {
       {!cameraAtiva ? (
         <button
           onClick={ativarCamera}
-          className="rounded-lg border border-zinc-300 px-4 py-3 text-sm font-medium text-zinc-700"
+          className="flex items-center justify-center gap-2 rounded-lg border border-zinc-300 px-4 py-3 text-sm font-medium text-zinc-700 lg:gap-3 lg:py-6 lg:text-2xl"
         >
+          <IconeCamera className="h-5 w-5 lg:h-8 lg:w-8" />
           Ativar câmera para ler código de barras
         </button>
       ) : (
-        <div className="flex flex-col gap-2">
-          <video ref={videoRef} className="w-full rounded-lg border border-zinc-300" muted playsInline />
+        <div className="flex flex-col gap-2 lg:gap-3">
+          <video
+            ref={videoRef}
+            className="w-full rounded-lg border border-zinc-300 lg:mx-auto lg:max-w-xl"
+            muted
+            playsInline
+          />
           <button
             onClick={desativarCamera}
-            className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700"
+            className="flex items-center justify-center gap-2 rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 lg:gap-3 lg:py-4 lg:text-2xl"
           >
+            <IconeCamera className="h-5 w-5 lg:h-8 lg:w-8" />
             Desativar câmera
           </button>
         </div>
       )}
 
       {candidatos && (
-        <div className="rounded-lg border border-amber-300 bg-amber-50 p-4">
-          <p className="text-sm font-medium text-amber-900">
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 lg:rounded-2xl lg:border-4 lg:p-7">
+          <p className="text-sm font-medium text-amber-900 lg:text-2xl">
             Este código existe em mais de um lote. Selecione o correto:
           </p>
-          <ul className="mt-2 flex flex-col gap-2">
+          <ul className="mt-2 flex flex-col gap-2 lg:mt-4 lg:gap-3">
             {candidatos.map((c) => (
               <li key={c.pecaId}>
                 <button
                   onClick={() => codigoPendente && enviarCodigo(codigoPendente, c.loteId)}
-                  className="w-full rounded-md border border-amber-300 bg-white px-3 py-2 text-left text-sm hover:bg-amber-100"
+                  className="w-full rounded-md border border-amber-300 bg-white px-3 py-2 text-left text-sm hover:bg-amber-100 lg:rounded-lg lg:px-5 lg:py-4 lg:text-xl"
                 >
                   <span className="font-medium">{c.clienteNome}</span> · {c.ambiente} · módulo{" "}
                   {c.moduloCodigo} · {c.descricaoPeca} · <span className="font-medium">pilha {c.pilha}</span>
@@ -401,11 +509,14 @@ export default function BipagemClient({ etapas }: { etapas: Etapa[] }) {
       )}
 
       {feedback?.peca?.pilha != null && (
-        <div className="flex flex-col items-center gap-1 rounded-xl border-4 border-zinc-900 bg-zinc-900 py-6 text-center text-white">
-          <span className="text-sm uppercase tracking-wide text-zinc-300">Coloque a peça na</span>
-          <span className="text-6xl font-bold leading-none">Pilha {feedback.peca.pilha}</span>
+        <div className="flex flex-col items-center gap-1 rounded-xl border-4 border-blue-700 bg-blue-600 py-6 text-center text-white lg:gap-3 lg:border-8 lg:py-16">
+          <span className="flex items-center gap-1.5 text-sm uppercase tracking-wide text-blue-100 lg:gap-3 lg:text-2xl">
+            <IconePilha className="h-4 w-4 lg:h-8 lg:w-8" />
+            Coloque a peça na
+          </span>
+          <span className="text-6xl font-bold leading-none lg:text-[10rem]">Pilha {feedback.peca.pilha}</span>
           {feedback.progressoPilha && (
-            <span className="mt-1 text-sm text-zinc-300">
+            <span className="mt-1 text-sm text-blue-100 lg:mt-3 lg:text-2xl">
               {feedback.progressoPilha.concluidas} de {feedback.progressoPilha.total} peças desta
               pilha já bipadas em {etapaAtual?.nome}
             </span>
@@ -413,20 +524,26 @@ export default function BipagemClient({ etapas }: { etapas: Etapa[] }) {
         </div>
       )}
 
-      {feedback && (
-        <div className={`rounded-lg border p-4 ${CORES[feedback.tipo]}`}>
-          <p className="text-base font-semibold">{feedback.mensagem}</p>
-          {feedback.peca && (
-            <p className="mt-1 text-sm">
-              Módulo {feedback.peca.moduloCodigo} · {feedback.peca.descricaoPeca}
-              {feedback.peca.comprimento && feedback.peca.profundidade && (
-                <> · {feedback.peca.comprimento} x {feedback.peca.profundidade}</>
+      {feedback && (() => {
+        const IconeFeedback = ICONES_FEEDBACK[feedback.tipo];
+        return (
+          <div className={`flex items-start gap-3 rounded-lg border p-4 lg:gap-5 lg:rounded-2xl lg:border-4 lg:p-8 ${CORES[feedback.tipo]}`}>
+            <IconeFeedback className="h-6 w-6 shrink-0 lg:h-14 lg:w-14" />
+            <div>
+              <p className="text-base font-semibold lg:text-4xl">{feedback.mensagem}</p>
+              {feedback.peca && (
+                <p className="mt-1 text-sm lg:mt-3 lg:text-2xl">
+                  Módulo {feedback.peca.moduloCodigo} · {feedback.peca.descricaoPeca}
+                  {feedback.peca.comprimento && feedback.peca.profundidade && (
+                    <> · {feedback.peca.comprimento} x {feedback.peca.profundidade}</>
+                  )}
+                  {feedback.peca.chapaMaterial && <> · {feedback.peca.chapaMaterial}</>}
+                </p>
               )}
-              {feedback.peca.chapaMaterial && <> · {feedback.peca.chapaMaterial}</>}
-            </p>
-          )}
-        </div>
-      )}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
