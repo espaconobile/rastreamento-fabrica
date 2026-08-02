@@ -1,6 +1,11 @@
 import { db } from "@/lib/db";
 import BipagemClient from "./bipagem-client";
 
+// Sem isso, a Vercel pre-renderiza esta pagina como estatica no build e a lista de clientes
+// fica congelada de quando foi feito o deploy — clientes importados depois nunca apareceriam
+// no seletor (mesmo bug do Painel, ver app/page.tsx).
+export const dynamic = "force-dynamic";
+
 export default async function BiparPage() {
   const etapas = await db.etapa.findMany({ orderBy: { ordem: "asc" } });
   const projetos = await db.projeto.findMany({

@@ -4,6 +4,12 @@ import { calcularProgressoLote } from "@/lib/loteProgress";
 import ExcluirLoteButton from "@/app/components/ExcluirLoteButton";
 import AutoRefresh from "@/app/components/AutoRefresh";
 
+// Sem isso, o Next.js pre-renderiza esta pagina como estatica no build (nao ha nenhuma chamada
+// a fetch() com sinalizacao de cache que force o modo dinamico automaticamente so por usar o
+// Prisma) e passa a servir sempre a mesma versao congelada de quando foi feito o deploy — lotes
+// importados depois nunca apareceriam aqui.
+export const dynamic = "force-dynamic";
+
 export default async function HomePage() {
   const etapas = await db.etapa.findMany({ orderBy: { ordem: "asc" } });
   // Etapas de excecao (ex: "Peca Danificada") nao entram nas barras de progresso sequenciais —
