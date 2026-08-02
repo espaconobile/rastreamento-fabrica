@@ -219,3 +219,59 @@ O iPhone tem duas restrições que o Android/Chrome não têm, ambas relevantes 
 - Seccionadora de cortes avulsos como etapa própria.
 - Reimpressão de etiqueta (para etiqueta danificada).
 - Alertas de peça "parada há muito tempo" numa etapa.
+
+## Pilhas de peças "soltas" (avulsas)
+
+Peças cujo módulo aparece com **apenas 1 peça** naquele lote não têm de fato nenhum outro
+elemento pra ficar fisicamente junto — decisão do usuário foi tratar essas como "avulsas" e
+empilhar todas juntas numa única pilha comum, em vez de virar uma pilha (fisicamente uma
+"posição" na área de separação) para cada peça individual. Implementado em
+`app/api/importar/route.ts`: conta quantas peças cada `moduloCodigo` tem no lote; se for 1,
+a peça usa uma chave especial (`__AVULSAS__`) em vez do próprio código de módulo pra decidir a
+pilha, e todas as avulsas do lote (mesmo com `moduloCodigo` diferentes entre si) caem no mesmo
+número de pilha. Módulos com 2+ peças continuam com pilha própria, normalmente.
+
+- **Progresso da pilha é contado por `pilha`, não por `moduloCodigo`** (`app/api/bipar/route.ts`)
+  — como a pilha de avulsas mistura vários `moduloCodigo` diferentes, contar por módulo
+  subestimaria o total. Se mexer nesse cálculo de novo, manter o filtro por `pilha`.
+- No detalhe do lote (`app/lotes/[id]/page.tsx`), uma pilha com mais de um `moduloCodigo`
+  distinto entre suas peças mostra o rótulo "avulsas · N módulos" em vez de "módulo X".
+
+## Identificação por cliente na tela de bipagem (não mais "estação")
+
+O campo livre "nome da estação" foi substituído por uma seleção do **cliente** (nome do
+`Projeto` já importado), decisão do usuário — mais útil no dia a dia do que um nome de estação
+arbitrário. `app/bipar/page.tsx` busca os nomes distintos de `Projeto.clienteNome` (mais recente
+primeiro) e passa como lista para o `<select>` em `app/bipar/bipagem-client.tsx`. O campo
+`Bipagem.estacaoNome` foi renomeado para `Bipagem.clienteNome` no schema (migration
+`rename_estacao_to_cliente` — tabela estava vazia no momento, sem perda de dado real).
+
+## Deploy em produção (concluído em 2026-08-02)
+
+O sistema está publicado e acessível de qualquer lugar, sem depender do Wi-Fi da fábrica:
+
+- **App**: Vercel, projeto `rastreamento-fabrica`, repositório GitHub
+  `espaconobile/rastreamento-fabrica`. Deploy automático a cada push na branch `main`.
+- **Banco de produção**: Postgres no Neon (projeto "nameless-paper" no painel do Neon). A
+  variável `DATABASE_URL` configurada nas Environment Variables do projeto na Vercel usa a
+  **connection string "pooled"** (com `-pooler` no hostname) — obrigatório em serverless
+  (Vercel), porque cada função abre sua própria conexão e o Postgres tem limite de conexões
+  simultâneas; a connection string "direct" (sem pooler) esgotaria isso rapidamente sob uso real.
+- **Banco de desenvolvimento local**: um segundo projeto Neon separado ("mute-unit"), configurado
+  no `.env` local (não versionado). Decisão do usuário para não misturar testes locais com dados
+  reais de produção — já tivemos um incidente antes com teste apagando dado real (ver
+  [[feedback-be-careful-with-destructive-ui-testing]]). `npm run dev`/`dev:https` sempre aponta
+  pro banco de dev; só o ambiente da Vercel aponta pro de produção.
+- **Migration history foi recriada do zero** (`prisma/migrations/20260802160139_init`) na troca
+  de SQLite pra Postgres — os dialetos são incompatíveis, então as migrations antigas (SQLite)
+  foram apagadas e uma migration `init` nova foi gerada direto contra o Postgres. Se precisar
+  alterar o schema de novo, `npx prisma migrate dev` local (contra o banco de dev) gera a
+  migration, e `npx prisma migrate deploy` (ou o próprio fluxo de deploy) aplica em produção.
+- **Gotcha do deploy**: primeiro deploy na Vercel falhou com
+  `PrismaClientInitializationError: ...outdated Prisma Client...`, porque a Vercel cacheia
+  `node_modules` entre builds e isso pula o hook de auto-geração do Prisma Client que roda no
+  install normal. Corrigido adicionando `"postinstall": "prisma generate"` em `package.json`
+  (`scripts`) — sem isso, todo deploy novo quebra do mesmo jeito.
+- Rodar `npm run db:seed` (ou `npx tsx prisma/seed.ts` com `DATABASE_URL` apontando pro banco
+  certo) sempre que um banco novo for criado — é o que popula as etapas fixas (Corte CNC,
+  Coladeira de Bordas, Separação, Peça Danificada).

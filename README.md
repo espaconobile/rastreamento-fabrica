@@ -64,19 +64,26 @@ Novas etapas (ex: Furação, Expedição, Montagem) podem ser adicionadas sem al
 apenas inserindo uma nova linha na tabela `Etapa` com o `ordem` correto (e `usaPilha = true` se a
 etapa também precisar mostrar a instrução de pilha).
 
-## Publicando na nuvem (para acesso pelo Wi-Fi da fábrica)
+## Produção
 
-Este projeto está pronto para rodar localmente com SQLite. Para hospedar na nuvem (acessível
-pelos coletores via Wi-Fi da fábrica, de qualquer lugar):
+O sistema está publicado e acessível de qualquer lugar (não depende do Wi-Fi da fábrica nem de
+um computador local ligado):
 
-1. Crie um banco Postgres gratuito (ex: [Neon](https://neon.tech) ou
-   [Supabase](https://supabase.com)).
-2. No `prisma/schema.prisma`, troque `provider = "sqlite"` por `provider = "postgresql"`.
-3. Rode `npx prisma migrate deploy` apontando `DATABASE_URL` para o Postgres novo.
-4. Publique o projeto no [Vercel](https://vercel.com) (`vercel deploy`), configurando a variável
-   de ambiente `DATABASE_URL` lá.
-5. Rode `npm run db:seed` uma vez (pode ser via `vercel env pull` + rodar local, ou um script
-   one-off) para popular as etapas no banco de produção.
+- **App**: [Vercel](https://vercel.com), deploy automático a cada push na branch `main` do
+  repositório GitHub `espaconobile/rastreamento-fabrica`.
+- **Banco**: Postgres no [Neon](https://neon.tech). A `DATABASE_URL` configurada nas Environment
+  Variables do projeto na Vercel usa a connection string **"pooled"** (com `-pooler` no
+  hostname) — obrigatório em ambiente serverless, senão o banco esgota conexões rápido sob uso
+  real.
+- O banco de **desenvolvimento local** é um projeto Neon separado, configurado só no `.env` local
+  (não versionado) — testes daqui não tocam nos dados reais de produção.
+
+Detalhes de como isso foi montado (e um gotcha de deploy na Vercel com cache do Prisma Client)
+estão em `NOTES.md`, seção "Deploy em produção".
+
+Para criar um banco novo do zero (ex: se for recriar o ambiente): rodar
+`npx prisma migrate deploy` com a `DATABASE_URL` apontando pro banco novo, seguido de
+`npm run db:seed` pra popular as etapas fixas de produção.
 
 ## Dispositivo de bipagem recomendado
 
