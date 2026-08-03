@@ -618,7 +618,7 @@ export default function BipagemClient({ etapas, clientes }: { etapas: Etapa[]; c
         <div className="flex flex-col gap-2 lg:gap-3">
           <video
             ref={videoRef}
-            className="w-full max-h-[35vh] rounded-lg border border-zinc-300 object-cover lg:mx-auto lg:max-w-xl lg:max-h-[45vh]"
+            className="w-full max-h-[22vh] rounded-lg border border-zinc-300 object-cover lg:mx-auto lg:max-w-xl lg:max-h-[35vh]"
             muted
             playsInline
           />
