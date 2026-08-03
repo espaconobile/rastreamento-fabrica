@@ -1,22 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
+import { del, get } from "@vercel/blob";
 import { db } from "@/lib/db";
 import { parseEtiquetasPdf, type PecaExtraida } from "@/lib/parseEtiquetas";
 
 export async function POST(request: NextRequest) {
-  const formData = await request.formData();
-  const file = formData.get("file");
+  const { blobUrl, fileName } = (await request.json()) as {
+    blobUrl?: string;
+    fileName?: string;
+  };
 
-  if (!(file instanceof File)) {
+  if (!blobUrl || !fileName) {
     return NextResponse.json({ error: "Nenhum arquivo enviado." }, { status: 400 });
   }
-  if (!file.name.toLowerCase().endsWith(".pdf")) {
+  if (!fileName.toLowerCase().endsWith(".pdf")) {
     return NextResponse.json(
       { error: "Envie o arquivo Etiquetas.pdf exportado do Promob (formato PDF)." },
       { status: 400 }
     );
   }
 
-  const buffer = Buffer.from(await file.arrayBuffer());
+  let buffer: Buffer;
+  try {
+    const blobResult = await get(blobUrl, {
+      access: "private",
+      token: process.env.BLOB_READ_WRITE_TOKEN,
+    });
+    if (!blobResult?.stream) throw new Error("blob não encontrado");
+    buffer = Buffer.from(await new Response(blobResult.stream).arrayBuffer());
+  } catch (err) {
+    console.error("Falha ao ler blob enviado:", err);
+    return NextResponse.json(
+      { error: "Não foi possível ler o arquivo enviado. Tente novamente." },
+      { status: 502 }
+    );
+  }
+  await del(blobUrl, { token: process.env.BLOB_READ_WRITE_TOKEN }).catch(() => {});
 
   let parsed;
   try {
@@ -45,7 +63,7 @@ export async function POST(request: NextRequest) {
   const projeto = await db.projeto.create({
     data: {
       clienteNome: parsed.clienteNome || "Não identificado",
-      nomeArquivoOrigem: file.name,
+      nomeArquivoOrigem: fileName,
     },
   });
 

@@ -2,6 +2,7 @@
 
 import { useRef, useState, type SVGProps } from "react";
 import Link from "next/link";
+import { upload } from "@vercel/blob/client";
 
 interface ResumoLote {
   loteId: string;
@@ -114,9 +115,16 @@ export default function ImportarPage() {
     setErro(null);
 
     try {
-      const formData = new FormData();
-      formData.append("file", arquivo);
-      const res = await fetch("/api/importar", { method: "POST", body: formData });
+      const blob = await upload(arquivo.name, arquivo, {
+        access: "private",
+        handleUploadUrl: "/api/importar/upload",
+      });
+
+      const res = await fetch("/api/importar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ blobUrl: blob.url, fileName: arquivo.name }),
+      });
       const data = await res.json();
 
       if (!res.ok) {
