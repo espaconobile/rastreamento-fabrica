@@ -27,7 +27,7 @@ export default async function HomePage() {
   });
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8 lg:max-w-6xl lg:px-10 lg:py-14">
+    <div className="mx-auto max-w-4xl px-4 py-8 lg:max-w-none lg:px-10 lg:py-14">
       <AutoRefresh />
       <h1 className="text-2xl font-semibold text-zinc-900 lg:text-5xl">Lotes em produção</h1>
 
@@ -41,7 +41,7 @@ export default async function HomePage() {
         </p>
       )}
 
-      <div className="mt-6 flex flex-col gap-4 lg:mt-10 lg:gap-6">
+      <div className="mt-6 grid grid-cols-1 gap-4 lg:mt-10 lg:grid-cols-[repeat(auto-fit,minmax(420px,1fr))] lg:items-start lg:gap-6">
         {lotes.map((lote) => {
           const total = lote.pecas.length;
           const progresso = calcularProgressoLote(lote.pecas, etapasProducao);
