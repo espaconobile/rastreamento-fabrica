@@ -2,6 +2,7 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { calcularProgressoLote } from "@/lib/loteProgress";
 import ExcluirLoteButton from "@/app/components/ExcluirLoteButton";
+import ResolverDanificadaButton from "@/app/components/ResolverDanificadaButton";
 import AutoRefresh from "@/app/components/AutoRefresh";
 
 // Sem isso, o Next.js pre-renderiza esta pagina como estatica no build (nao ha nenhuma chamada
@@ -26,10 +27,53 @@ export default async function HomePage() {
     orderBy: { createdAt: "desc" },
   });
 
+  // Painel global de pecas danificadas: reune de todos os clientes/lotes de uma vez, pra quem
+  // esta olhando o monitor/TV do chao de fabrica ver na hora o que precisa ser refeito, sem
+  // precisar abrir lote por lote ou estar bipando um cliente especifico (ver app/bipar, que tem a
+  // mesma lista mas so do cliente configurado naquela sessao).
+  const pecasDanificadas = await db.peca.findMany({
+    where: { bipagens: { some: { etapa: { ehExcecao: true } } } },
+    include: { lote: { include: { projeto: true } } },
+    orderBy: { createdAt: "asc" },
+  });
+
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 lg:max-w-none lg:px-10 lg:py-14">
       <AutoRefresh />
       <h1 className="text-2xl font-semibold text-zinc-900 lg:text-5xl">Lotes em produção</h1>
+
+      {pecasDanificadas.length > 0 && (
+        <div className="mt-6 rounded-lg border-2 border-rose-300 bg-rose-50 p-4 lg:mt-8 lg:rounded-2xl lg:border-4 lg:p-8">
+          <p className="flex items-center gap-2 text-sm font-semibold text-rose-900 lg:gap-3 lg:text-3xl">
+            ⚠ Peças danificadas aguardando refazer ({pecasDanificadas.length})
+          </p>
+          <ul className="mt-3 flex flex-col gap-2 lg:mt-6 lg:gap-4">
+            {pecasDanificadas.map((p) => (
+              <li
+                key={p.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-rose-200 bg-white px-4 py-3 lg:rounded-xl lg:px-7 lg:py-5"
+              >
+                <span className="text-sm text-rose-900 lg:text-2xl">
+                  <span className="mr-1.5 rounded bg-rose-100 px-1.5 py-0.5 font-mono text-xs text-rose-700 lg:text-base">
+                    {p.codigo}
+                  </span>
+                  {p.descricaoPeca} · módulo {p.moduloCodigo} · {p.lote.projeto.clienteNome} ·{" "}
+                  {p.lote.ambiente}
+                </span>
+                <div className="flex items-center gap-3 lg:gap-5">
+                  <Link
+                    href={`/lotes/${p.loteId}`}
+                    className="text-sm text-blue-600 underline lg:text-xl"
+                  >
+                    ver lote
+                  </Link>
+                  <ResolverDanificadaButton pecaId={p.id} />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {lotes.length === 0 && (
         <p className="mt-8 text-sm text-zinc-500 lg:text-xl">
