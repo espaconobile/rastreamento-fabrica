@@ -9,6 +9,7 @@ export const dynamic = "force-dynamic";
 export default async function BiparPage() {
   const etapas = await db.etapa.findMany({ orderBy: { ordem: "asc" } });
   const projetos = await db.projeto.findMany({
+    where: { lotes: { some: {} } },
     select: { clienteNome: true },
     orderBy: { dataImportacao: "desc" },
   });
