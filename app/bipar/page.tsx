@@ -20,7 +20,13 @@ export default async function BiparPage() {
   return (
     <div className="mx-auto max-w-lg px-4 py-6 lg:max-w-3xl lg:px-8 lg:py-10">
       <BipagemClient
-        etapas={etapas.map((e) => ({ id: e.id, nome: e.nome, ordem: e.ordem, usaPilha: e.usaPilha }))}
+        etapas={etapas.map((e) => ({
+          id: e.id,
+          nome: e.nome,
+          ordem: e.ordem,
+          usaPilha: e.usaPilha,
+          ehExcecao: e.ehExcecao,
+        }))}
         clientes={clientes}
       />
     </div>

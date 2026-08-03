@@ -11,6 +11,7 @@ interface Etapa {
   nome: string;
   ordem: number;
   usaPilha: boolean;
+  ehExcecao: boolean;
 }
 
 interface Candidato {
@@ -24,6 +25,7 @@ interface Candidato {
 }
 
 interface PecaInfo {
+  codigo: string;
   moduloCodigo: string;
   pilha?: number;
   descricaoPeca: string;
@@ -45,11 +47,20 @@ interface ProgressoPilha {
   total: number;
 }
 
+interface PecaDanificada {
+  pecaId: string;
+  codigo: string;
+  moduloCodigo: string;
+  descricaoPeca: string;
+  ambiente: string;
+}
+
 interface Feedback {
   tipo: FeedbackTipo;
   mensagem: string;
   peca?: PecaInfo;
   progressoPilha?: ProgressoPilha;
+  pilhaAvulsas?: boolean;
 }
 
 // Em telas de celular usamos fundo claro (mais legivel de perto); a partir de "lg" (monitor de
@@ -197,6 +208,8 @@ export default function BipagemClient({ etapas, clientes }: { etapas: Etapa[]; c
   const [progresso, setProgresso] = useState<{ totalNaEtapa: number; totalNoLote: number } | null>(null);
   const [cameraAtiva, setCameraAtiva] = useState(false);
   const [enviando, setEnviando] = useState(false);
+  const [danificadas, setDanificadas] = useState<PecaDanificada[]>([]);
+  const [resolvendoId, setResolvendoId] = useState<string | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -224,15 +237,36 @@ export default function BipagemClient({ etapas, clientes }: { etapas: Etapa[]; c
     if (!configurando) inputRef.current?.focus();
   }, [configurando]);
 
+  const etapaDanificada = etapas.find((e) => e.ehExcecao);
+
+  const carregarDanificadas = useCallback(async () => {
+    if (!clienteNome) return;
+    try {
+      const res = await fetch(`/api/danificadas?cliente=${encodeURIComponent(clienteNome)}`);
+      const data = await res.json();
+      if (Array.isArray(data.danificadas)) setDanificadas(data.danificadas);
+    } catch {
+      // Falha ao atualizar a lista nao e critica — o operador ainda consegue biper normalmente;
+      // a lista so fica desatualizada ate a proxima tentativa (proxima bipagem ou resolucao).
+    }
+  }, [clienteNome]);
+
+  useEffect(() => {
+    if (!configurando) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- setState so ocorre apos o await, dentro da funcao async
+      carregarDanificadas();
+    }
+  }, [configurando, carregarDanificadas]);
+
   const enviarCodigo = useCallback(
-    async (codigo: string, loteId?: string) => {
+    async (codigo: string, loteId?: string, etapaIdOverride?: string) => {
       if (!codigo || enviando) return;
       setEnviando(true);
       try {
         const res = await fetch("/api/bipar", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ codigo, etapaId, clienteNome, loteId }),
+          body: JSON.stringify({ codigo, etapaId: etapaIdOverride ?? etapaId, clienteNome, loteId }),
         });
         const data = await res.json();
 
@@ -251,9 +285,14 @@ export default function BipagemClient({ etapas, clientes }: { etapas: Etapa[]; c
           mensagem: data.mensagem ?? "Erro inesperado.",
           peca: data.peca,
           progressoPilha: data.progressoPilha,
+          pilhaAvulsas: data.pilhaAvulsas,
         });
-        if (data.progresso) setProgresso(data.progresso);
+        // So atualiza o contador "X de Y bipadas nesta etapa" quando o scan foi de fato pra etapa
+        // configurada — marcar danificada usa uma etapa diferente (a de excecao) e atualizar o
+        // contador com esse numero mostraria uma contagem errada pra etapa que esta na tela.
+        if (data.progresso && !etapaIdOverride) setProgresso(data.progresso);
         tocarBeep(audioCtxRef.current, tipo);
+        if (tipo === "EXCECAO_REGISTRADA") carregarDanificadas();
       } catch {
         setFeedback({ tipo: "ERRO", mensagem: "Erro de conexão ao registrar a bipagem." });
         tocarBeep(audioCtxRef.current, "ERRO");
@@ -263,8 +302,32 @@ export default function BipagemClient({ etapas, clientes }: { etapas: Etapa[]; c
         inputRef.current?.focus();
       }
     },
-    [etapaId, clienteNome, enviando]
+    [etapaId, clienteNome, enviando, carregarDanificadas]
   );
+
+  async function resolverDanificada(pecaId: string) {
+    setResolvendoId(pecaId);
+    try {
+      const res = await fetch(`/api/danificadas/${pecaId}`, { method: "DELETE" });
+      const data = await res.json();
+      if (res.ok) {
+        setDanificadas((atual) => atual.filter((d) => d.pecaId !== pecaId));
+        setCandidatos(null);
+        setCodigoPendente(null);
+        setFeedback({
+          tipo: "OK",
+          mensagem: "Peça refeita — removida da lista de danificadas.",
+          peca: data.peca,
+          pilhaAvulsas: data.pilhaAvulsas,
+        });
+        tocarBeep(audioCtxRef.current, "OK");
+      }
+    } catch {
+      // Falha de rede ao resolver: a peca simplesmente continua na lista pro operador tentar de novo.
+    } finally {
+      setResolvendoId(null);
+    }
+  }
 
   function handleSalvarConfiguracao(e: React.FormEvent) {
     e.preventDefault();
@@ -441,6 +504,39 @@ export default function BipagemClient({ etapas, clientes }: { etapas: Etapa[]; c
         </p>
       )}
 
+      {danificadas.length > 0 && (
+        <div className="rounded-lg border-2 border-rose-300 bg-rose-50 p-3 lg:rounded-2xl lg:border-4 lg:p-6">
+          <p className="flex items-center gap-1.5 text-sm font-semibold text-rose-900 lg:gap-2 lg:text-2xl">
+            <IconeExcecao className="h-4 w-4 lg:h-7 lg:w-7" />
+            Peças danificadas aguardando refazer ({danificadas.length})
+          </p>
+          <ul className="mt-2 flex flex-col gap-2 lg:mt-4 lg:gap-3">
+            {danificadas.map((d) => (
+              <li
+                key={d.pecaId}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-rose-200 bg-white px-3 py-2 lg:rounded-lg lg:px-5 lg:py-3"
+              >
+                <span className="text-sm text-rose-900 lg:text-xl">
+                  <span className="mr-1.5 rounded bg-rose-100 px-1.5 py-0.5 font-mono text-xs lg:text-base">
+                    {d.codigo}
+                  </span>
+                  {d.descricaoPeca} · módulo {d.moduloCodigo} · {d.ambiente}
+                </span>
+                <button
+                  type="button"
+                  disabled={resolvendoId === d.pecaId}
+                  onClick={() => resolverDanificada(d.pecaId)}
+                  className="flex items-center gap-1 rounded-md bg-green-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50 lg:gap-2 lg:rounded-lg lg:px-5 lg:py-2 lg:text-lg"
+                >
+                  <IconeCheck className="h-3.5 w-3.5 lg:h-5 lg:w-5" />
+                  {resolvendoId === d.pecaId ? "Removendo..." : "Refeita, remover"}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <form onSubmit={handleManualSubmit} className="flex gap-2 lg:gap-3">
         <input
           ref={inputRef}
@@ -460,6 +556,18 @@ export default function BipagemClient({ etapas, clientes }: { etapas: Etapa[]; c
           OK
         </button>
       </form>
+
+      {etapaDanificada && etapaDanificada.id !== etapaId && (
+        <button
+          type="button"
+          disabled={enviando || !codigoManual.trim()}
+          onClick={() => enviarCodigo(codigoManual.trim(), undefined, etapaDanificada.id)}
+          className="flex items-center justify-center gap-2 rounded-lg border-2 border-rose-300 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700 disabled:opacity-50 lg:gap-3 lg:rounded-xl lg:border-4 lg:py-5 lg:text-2xl"
+        >
+          <IconeExcecao className="h-5 w-5 lg:h-8 lg:w-8" />
+          Marcar peça danificada
+        </button>
+      )}
 
       {!cameraAtiva ? (
         <button
@@ -530,6 +638,11 @@ export default function BipagemClient({ etapas, clientes }: { etapas: Etapa[]; c
               {pilhaCompleta ? "Completa! Coloque esta última peça na" : "Coloque a peça na"}
             </span>
             <span className="text-6xl font-bold leading-none lg:text-[10rem]">Pilha {feedback.peca.pilha}</span>
+            {feedback.pilhaAvulsas && (
+              <span className="mt-1 rounded-md bg-white/20 px-3 py-1 font-mono text-2xl font-bold lg:mt-2 lg:px-6 lg:py-2 lg:text-5xl">
+                Peça {feedback.peca.codigo}
+              </span>
+            )}
             {pilhaCompleta ? (
               <span className="mt-1 text-base font-semibold text-green-50 lg:mt-3 lg:text-3xl">
                 ✓ Módulo {feedback.peca.moduloCodigo} completo para separação — pronto para pré-montagem

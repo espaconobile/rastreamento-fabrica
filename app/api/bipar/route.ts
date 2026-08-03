@@ -113,9 +113,14 @@ export async function POST(request: NextRequest) {
   // unica peca) dividem uma mesma pilha mesmo tendo moduloCodigo diferente entre si (ver
   // app/api/importar/route.ts), entao contar por moduloCodigo subestimaria o total dessa pilha.
   let progressoPilha: { concluidas: number; total: number } | undefined;
+  // Uma pilha e "de avulsas" quando junta pecas de mais de um modulo distinto (ver
+  // app/api/importar/route.ts) — nesse caso o codigo da peca e a unica forma de identificar cada
+  // peca na pilha fisica compartilhada, entao o cliente precisa saber pra mostrar em destaque.
+  let pilhaAvulsas = false;
   if (etapa.usaPilha) {
-    const totalNaPilha = await db.peca.count({
+    const pecasDaPilha = await db.peca.findMany({
       where: { loteId: peca.loteId, pilha: peca.pilha },
+      select: { moduloCodigo: true },
     });
     const bipadasNaPilhaNestaEtapa = await db.bipagem.count({
       where: {
@@ -124,13 +129,15 @@ export async function POST(request: NextRequest) {
         peca: { loteId: peca.loteId, pilha: peca.pilha },
       },
     });
-    progressoPilha = { concluidas: bipadasNaPilhaNestaEtapa, total: totalNaPilha };
+    progressoPilha = { concluidas: bipadasNaPilhaNestaEtapa, total: pecasDaPilha.length };
+    pilhaAvulsas = new Set(pecasDaPilha.map((p) => p.moduloCodigo)).size > 1;
   }
 
   return NextResponse.json({
     status,
     mensagem,
     peca: {
+      codigo: peca.codigo,
       moduloCodigo: peca.moduloCodigo,
       pilha: etapa.usaPilha ? peca.pilha : undefined,
       descricaoPeca: peca.descricaoPeca,
@@ -141,5 +148,6 @@ export async function POST(request: NextRequest) {
     lote: { id: peca.loteId },
     progresso: { totalNaEtapa, totalNoLote },
     progressoPilha,
+    pilhaAvulsas,
   });
 }
