@@ -508,21 +508,43 @@ export default function BipagemClient({ etapas, clientes }: { etapas: Etapa[]; c
         </div>
       )}
 
-      {feedback?.peca?.pilha != null && (
-        <div className="flex flex-col items-center gap-1 rounded-xl border-4 border-blue-700 bg-blue-600 py-6 text-center text-white lg:gap-3 lg:border-8 lg:py-16">
-          <span className="flex items-center gap-1.5 text-sm uppercase tracking-wide text-blue-100 lg:gap-3 lg:text-2xl">
-            <IconePilha className="h-4 w-4 lg:h-8 lg:w-8" />
-            Coloque a peça na
-          </span>
-          <span className="text-6xl font-bold leading-none lg:text-[10rem]">Pilha {feedback.peca.pilha}</span>
-          {feedback.progressoPilha && (
-            <span className="mt-1 text-sm text-blue-100 lg:mt-3 lg:text-2xl">
-              {feedback.progressoPilha.concluidas} de {feedback.progressoPilha.total} peças desta
-              pilha já bipadas em {etapaAtual?.nome}
+      {feedback?.peca?.pilha != null && (() => {
+        const pilhaCompleta =
+          !!feedback.progressoPilha && feedback.progressoPilha.concluidas === feedback.progressoPilha.total;
+        return (
+          <div
+            className={`flex flex-col items-center gap-1 rounded-xl border-4 py-6 text-center text-white lg:gap-3 lg:border-8 lg:py-16 ${
+              pilhaCompleta ? "border-green-700 bg-green-600" : "border-blue-700 bg-blue-600"
+            }`}
+          >
+            <span
+              className={`flex items-center gap-1.5 text-sm uppercase tracking-wide lg:gap-3 lg:text-2xl ${
+                pilhaCompleta ? "text-green-100" : "text-blue-100"
+              }`}
+            >
+              {pilhaCompleta ? (
+                <IconeCheck className="h-4 w-4 lg:h-8 lg:w-8" />
+              ) : (
+                <IconePilha className="h-4 w-4 lg:h-8 lg:w-8" />
+              )}
+              {pilhaCompleta ? "Completa! Coloque esta última peça na" : "Coloque a peça na"}
             </span>
-          )}
-        </div>
-      )}
+            <span className="text-6xl font-bold leading-none lg:text-[10rem]">Pilha {feedback.peca.pilha}</span>
+            {pilhaCompleta ? (
+              <span className="mt-1 text-base font-semibold text-green-50 lg:mt-3 lg:text-3xl">
+                ✓ Módulo {feedback.peca.moduloCodigo} completo para separação — pronto para pré-montagem
+              </span>
+            ) : (
+              feedback.progressoPilha && (
+                <span className="mt-1 text-sm text-blue-100 lg:mt-3 lg:text-2xl">
+                  {feedback.progressoPilha.concluidas} de {feedback.progressoPilha.total} peças desta
+                  pilha já bipadas em {etapaAtual?.nome}
+                </span>
+              )
+            )}
+          </div>
+        );
+      })()}
 
       {feedback && (() => {
         const IconeFeedback = ICONES_FEEDBACK[feedback.tipo];

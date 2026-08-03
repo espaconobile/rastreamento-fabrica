@@ -100,18 +100,22 @@ export default async function LoteDetailPage({
             return (
               <tbody key={pilha} className="divide-y divide-zinc-100 border-t-2 border-blue-200">
                 <tr>
-                  <td colSpan={2 + etapas.length} className="bg-blue-600 px-3 py-1.5 text-white">
+                  <td
+                    colSpan={2 + etapas.length}
+                    className={`px-3 py-1.5 text-white ${pilhaCompleta ? "bg-green-600" : "bg-blue-600"}`}
+                  >
                     <span className="text-sm font-semibold">Pilha {pilha}</span>
-                    <span className="ml-2 text-xs text-blue-100">
+                    <span className={`ml-2 text-xs ${pilhaCompleta ? "text-green-100" : "text-blue-100"}`}>
                       {rotuloModulo} · {pecasDaPilha.length} peças
                       {ultimaEtapa && (
-                        <>
-                          {" "}
-                          · {concluidasNaUltimaEtapa}/{pecasDaPilha.length} em {ultimaEtapa.nome}
-                          {pilhaCompleta && " ✓ completa"}
-                        </>
+                        <> · {concluidasNaUltimaEtapa}/{pecasDaPilha.length} em {ultimaEtapa.nome}</>
                       )}
                     </span>
+                    {pilhaCompleta && (
+                      <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-white/20 px-2 py-0.5 text-xs font-semibold">
+                        ✓ completo para pré-montagem
+                      </span>
+                    )}
                   </td>
                 </tr>
                 {pecasDaPilha.map((peca) => {
