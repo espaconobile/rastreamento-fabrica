@@ -210,6 +210,7 @@ export default function BipagemClient({ etapas, clientes }: { etapas: Etapa[]; c
   const [enviando, setEnviando] = useState(false);
   const [danificadas, setDanificadas] = useState<PecaDanificada[]>([]);
   const [resolvendoId, setResolvendoId] = useState<string | null>(null);
+  const [modoDanificada, setModoDanificada] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -220,6 +221,11 @@ export default function BipagemClient({ etapas, clientes }: { etapas: Etapa[]; c
   const leituraEmAndamentoRef = useRef(false);
   const ultimaLeituraRef = useRef<{ codigo: string; ts: number }>({ codigo: "", ts: 0 });
   const audioCtxRef = useRef<AudioContext | null>(null);
+  // O loop de leitura da camera e configurado uma unica vez em ativarCamera() e fica rodando num
+  // setInterval de vida longa — sem essa ref, o callback do interval ficaria preso ao valor de
+  // modoDanificada de quando a camera foi ligada (closure "presa"), e nunca perceberia o operador
+  // tocando em "Marcar peça danificada" enquanto a camera ja esta ativa.
+  const modoDanificadaRef = useRef(false);
 
   useEffect(() => {
     const cli = localStorage.getItem("bipagem.cliente");
@@ -236,6 +242,10 @@ export default function BipagemClient({ etapas, clientes }: { etapas: Etapa[]; c
   useEffect(() => {
     if (!configurando) inputRef.current?.focus();
   }, [configurando]);
+
+  useEffect(() => {
+    modoDanificadaRef.current = modoDanificada;
+  }, [modoDanificada]);
 
   const etapaDanificada = etapas.find((e) => e.ehExcecao);
 
@@ -300,6 +310,10 @@ export default function BipagemClient({ etapas, clientes }: { etapas: Etapa[]; c
         setEnviando(false);
         setCodigoManual("");
         inputRef.current?.focus();
+        // O "modo danificada" vale so pra 1 bipagem: depois de usado (digitado ou bipado pela
+        // camera), volta sozinho pro modo normal, pra nao correr o risco do operador esquecer que
+        // estava ativo e marcar sem querer a proxima peca normal como danificada.
+        if (etapaIdOverride) setModoDanificada(false);
       }
     },
     [etapaId, clienteNome, enviando, carregarDanificadas]
@@ -340,7 +354,7 @@ export default function BipagemClient({ etapas, clientes }: { etapas: Etapa[]; c
   function handleManualSubmit(e: React.FormEvent) {
     e.preventDefault();
     obterAudioContext(audioCtxRef); // destrava o audio dentro do gesto de tap/clique (exigencia do iOS)
-    enviarCodigo(codigoManual.trim());
+    enviarCodigo(codigoManual.trim(), undefined, modoDanificada ? etapaDanificada?.id : undefined);
   }
 
   const pararCamera = useCallback(() => {
@@ -402,7 +416,7 @@ export default function BipagemClient({ etapas, clientes }: { etapas: Etapa[]; c
               return;
             }
             ultimaLeituraRef.current = { codigo: texto, ts: agora };
-            enviarCodigo(texto);
+            enviarCodigo(texto, undefined, modoDanificadaRef.current ? etapaDanificada?.id : undefined);
           }
         } finally {
           leituraEmAndamentoRef.current = false;
@@ -545,29 +559,52 @@ export default function BipagemClient({ etapas, clientes }: { etapas: Etapa[]; c
           placeholder="Digite ou bipe o código da peça"
           inputMode="numeric"
           autoFocus
-          className="flex-1 rounded-lg border border-zinc-300 p-4 text-lg lg:p-7 lg:text-4xl"
+          className={`flex-1 rounded-lg border p-4 text-lg lg:p-7 lg:text-4xl ${
+            modoDanificada ? "border-rose-500 ring-2 ring-rose-300" : "border-zinc-300"
+          }`}
         />
         <button
           type="submit"
           disabled={enviando}
-          className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-5 text-sm font-medium text-white disabled:opacity-50 lg:gap-3 lg:px-9 lg:text-3xl"
+          className={`flex items-center gap-1.5 rounded-lg px-5 text-sm font-medium text-white disabled:opacity-50 lg:gap-3 lg:px-9 lg:text-3xl ${
+            modoDanificada ? "bg-rose-600" : "bg-blue-600"
+          }`}
         >
-          <IconeCheck className="h-5 w-5 lg:h-9 lg:w-9" />
+          {modoDanificada ? (
+            <IconeExcecao className="h-5 w-5 lg:h-9 lg:w-9" />
+          ) : (
+            <IconeCheck className="h-5 w-5 lg:h-9 lg:w-9" />
+          )}
           OK
         </button>
       </form>
 
-      {etapaDanificada && etapaDanificada.id !== etapaId && (
-        <button
-          type="button"
-          disabled={enviando || !codigoManual.trim()}
-          onClick={() => enviarCodigo(codigoManual.trim(), undefined, etapaDanificada.id)}
-          className="flex items-center justify-center gap-2 rounded-lg border-2 border-rose-300 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700 disabled:opacity-50 lg:gap-3 lg:rounded-xl lg:border-4 lg:py-5 lg:text-2xl"
-        >
-          <IconeExcecao className="h-5 w-5 lg:h-8 lg:w-8" />
-          Marcar peça danificada
-        </button>
-      )}
+      {etapaDanificada &&
+        etapaDanificada.id !== etapaId &&
+        (modoDanificada ? (
+          <div className="flex items-center justify-between gap-3 rounded-lg border-2 border-rose-600 bg-rose-600 px-4 py-3 text-white lg:gap-4 lg:rounded-xl lg:border-4 lg:py-5">
+            <span className="flex items-center gap-2 text-sm font-semibold lg:gap-3 lg:text-2xl">
+              <IconeExcecao className="h-5 w-5 shrink-0 lg:h-8 lg:w-8" />
+              Modo danificada ativo — bipe ou digite o código da peça
+            </span>
+            <button
+              type="button"
+              onClick={() => setModoDanificada(false)}
+              className="shrink-0 rounded-md bg-white/20 px-3 py-1.5 text-xs font-medium lg:px-5 lg:py-2 lg:text-lg"
+            >
+              Cancelar
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setModoDanificada(true)}
+            className="flex items-center justify-center gap-2 rounded-lg border-2 border-rose-300 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700 lg:gap-3 lg:rounded-xl lg:border-4 lg:py-5 lg:text-2xl"
+          >
+            <IconeExcecao className="h-5 w-5 lg:h-8 lg:w-8" />
+            Marcar peça danificada
+          </button>
+        ))}
 
       {!cameraAtiva ? (
         <button
@@ -581,7 +618,7 @@ export default function BipagemClient({ etapas, clientes }: { etapas: Etapa[]; c
         <div className="flex flex-col gap-2 lg:gap-3">
           <video
             ref={videoRef}
-            className="w-full rounded-lg border border-zinc-300 lg:mx-auto lg:max-w-xl"
+            className="w-full max-h-[35vh] rounded-lg border border-zinc-300 object-cover lg:mx-auto lg:max-w-xl lg:max-h-[45vh]"
             muted
             playsInline
           />
