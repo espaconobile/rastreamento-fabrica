@@ -81,6 +81,7 @@ export default async function LoteDetailPage({
                   {et.nome}
                 </th>
               ))}
+              <th className="px-3 py-2" />
             </tr>
           </thead>
           {gruposOrdenados.map(([pilha, pecasDaPilha]) => {
@@ -101,7 +102,7 @@ export default async function LoteDetailPage({
               <tbody key={pilha} className="divide-y divide-zinc-100 border-t-2 border-blue-200">
                 <tr>
                   <td
-                    colSpan={2 + etapas.length}
+                    colSpan={3 + etapas.length}
                     className={`px-3 py-1.5 text-white ${pilhaCompleta ? "bg-green-600" : "bg-blue-600"}`}
                   >
                     <span className="text-sm font-semibold">Pilha {pilha}</span>
@@ -153,6 +154,16 @@ export default async function LoteDetailPage({
                           )}
                         </td>
                       ))}
+                      <td className="px-3 py-2 text-right">
+                        <a
+                          href={`/lotes/${lote.id}/pecas/${peca.id}/etiqueta`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs font-medium text-blue-600 hover:underline"
+                        >
+                          Reimprimir
+                        </a>
+                      </td>
                     </tr>
                   );
                 })}

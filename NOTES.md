@@ -229,7 +229,6 @@ O iPhone tem duas restrições que o Android/Chrome não têm, ambas relevantes 
 - Import via `Cut_Pro.csv` (dados mais ricos: furos, rebaixos, código de material) — hoje só
   usamos o `Etiquetas.pdf`. Ficou de fora por não ser gerado em todo projeto.
 - Seccionadora de cortes avulsos como etapa própria.
-- Reimpressão de etiqueta (para etiqueta danificada).
 - Alertas de peça "parada há muito tempo" numa etapa.
 
 ## Pilhas de peças "soltas" (avulsas)
@@ -257,6 +256,31 @@ arbitrário. `app/bipar/page.tsx` busca os nomes distintos de `Projeto.clienteNo
 primeiro) e passa como lista para o `<select>` em `app/bipar/bipagem-client.tsx`. O campo
 `Bipagem.estacaoNome` foi renomeado para `Bipagem.clienteNome` no schema (migration
 `rename_estacao_to_cliente` — tabela estava vazia no momento, sem perda de dado real).
+
+## Reimpressão de etiqueta
+
+Botão "Reimprimir" em cada linha da tabela do detalhe do lote (`app/lotes/[id]/page.tsx`), que
+abre `app/lotes/[id]/pecas/[pecaId]/etiqueta/page.tsx` numa aba nova.
+
+- **Não é o PDF original.** O `Etiquetas.pdf` importado é descartado logo após o parsing (ver
+  `app/api/importar/route.ts`, `del(blobUrl, ...)`) — só os campos extraídos ficam no banco. Essa
+  tela gera uma etiqueta **nova** a partir desses campos (cliente, ambiente, módulo, descrição,
+  dimensões, chapa, código), não uma cópia fiel do layout do Promob.
+- **Código de barras gerado com `jsbarcode`** (`app/components/EtiquetaPrintView.tsx`), formato
+  `CODE128` desenhado num `<svg>` via `useEffect` (client component — a lib manipula o DOM
+  diretamente, não dá pra rodar no server). Decisão explícita do usuário confirmar que a fábrica
+  usa uma **impressora térmica de rolo 100x50mm**, não impressora comum — daí o tamanho fixo da
+  etiqueta em vez de deixar a impressora decidir.
+- **CSS de impressão com página nomeada** (`app/globals.css`, `@page etiqueta { size: 100mm 50mm;
+  margin: 0 }` + `.pagina-etiqueta { page: etiqueta }`). Página nomeada foi usada em vez de mudar
+  o `@page` padrão pra não afetar a impressão de outras telas do app (nenhuma outra tela é
+  pensada pra ser impressa hoje, mas o padrão global de página não devia mudar por causa disso).
+  `header`/`nav` (fixos em todo layout, ver `app/layout.tsx`) e a classe `.no-print` somem só
+  dentro de `@media print`.
+- **Gotcha de layout**: o botão "Imprimir etiqueta" não pode usar `fixed bottom-*`, porque
+  colide com a `NavBar` (também fixa no rodapé, `z-50`) e fica escondido atrás dela. Resolvido
+  deixando o botão no fluxo normal (`.no-print`, abaixo do preview da etiqueta), sem
+  posicionamento fixo.
 
 ## Deploy em produção (concluído em 2026-08-02)
 
