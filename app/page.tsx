@@ -2,6 +2,7 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { calcularProgressoLote } from "@/lib/loteProgress";
 import ExcluirLoteButton from "@/app/components/ExcluirLoteButton";
+import ArquivarLoteButton from "@/app/components/ArquivarLoteButton";
 import ResolverDanificadaButton from "@/app/components/ResolverDanificadaButton";
 import AutoRefresh from "@/app/components/AutoRefresh";
 
@@ -20,12 +21,15 @@ export default async function HomePage() {
   const excecaoIds = new Set(etapas.filter((e) => e.ehExcecao).map((e) => e.id));
 
   const lotes = await db.lote.findMany({
+    where: { arquivadoEm: null },
     include: {
       projeto: true,
       pecas: { include: { bipagens: { select: { etapaId: true } } } },
     },
     orderBy: { createdAt: "desc" },
   });
+
+  const totalArquivados = await db.lote.count({ where: { arquivadoEm: { not: null } } });
 
   // Painel global de pecas danificadas: reune de todos os clientes/lotes de uma vez, pra quem
   // esta olhando o monitor/TV do chao de fabrica ver na hora o que precisa ser refeito, sem
@@ -40,7 +44,17 @@ export default async function HomePage() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 lg:max-w-none lg:px-10 lg:py-14">
       <AutoRefresh />
-      <h1 className="text-2xl font-semibold text-zinc-900 lg:text-5xl">Lotes em produção</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold text-zinc-900 lg:text-5xl">Lotes em produção</h1>
+        {totalArquivados > 0 && (
+          <Link
+            href="/arquivados"
+            className="text-sm text-zinc-500 underline lg:text-xl"
+          >
+            Ver arquivados ({totalArquivados})
+          </Link>
+        )}
+      </div>
 
       {pecasDanificadas.length > 0 && (
         <div className="mt-6 rounded-lg border-2 border-rose-300 bg-rose-50 p-4 lg:mt-8 lg:rounded-2xl lg:border-4 lg:p-8">
@@ -92,6 +106,10 @@ export default async function HomePage() {
           const danificadas = lote.pecas.filter((p) =>
             p.bipagens.some((b) => excecaoIds.has(b.etapaId))
           ).length;
+          // Concluido = toda peca ja passou pela ultima etapa de producao (Separacao). So um
+          // indicador visual pra ajudar a decidir quando arquivar — nao bloqueia nem exige nada.
+          const ultimaEtapa = progresso[progresso.length - 1];
+          const concluido = total > 0 && ultimaEtapa?.concluidas === total;
 
           return (
             <Link
@@ -104,6 +122,11 @@ export default async function HomePage() {
                   {lote.projeto.clienteNome} · {lote.ambiente}
                 </p>
                 <div className="flex items-center gap-3">
+                  {concluido && (
+                    <p className="text-xs font-medium text-green-600 lg:text-lg">
+                      ✓ concluído
+                    </p>
+                  )}
                   {danificadas > 0 && (
                     <p className="text-xs font-medium text-rose-600 lg:text-lg">
                       ⚠ {danificadas} danificada{danificadas > 1 ? "s" : ""}
@@ -112,7 +135,8 @@ export default async function HomePage() {
                   <p className="text-xs text-zinc-500 lg:text-lg">{total} peças</p>
                 </div>
               </div>
-              <div className="mt-2 flex justify-end">
+              <div className="mt-2 flex justify-end gap-4">
+                <ArquivarLoteButton loteId={lote.id} arquivado={false} />
                 <ExcluirLoteButton
                   loteId={lote.id}
                   nomeLote={`${lote.projeto.clienteNome} · ${lote.ambiente}`}

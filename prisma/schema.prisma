@@ -19,12 +19,15 @@ model Projeto {
 // Um lote = todas as pecas de um ambiente (comodo) dentro de um projeto.
 // Ex: "1_COZINHAEAREA" do projeto do cliente Ademir.
 model Lote {
-  id        String   @id @default(cuid())
-  projetoId String
-  projeto   Projeto  @relation(fields: [projetoId], references: [id], onDelete: Cascade)
-  ambiente  String
-  createdAt DateTime @default(now())
-  pecas     Peca[]
+  id          String    @id @default(cuid())
+  projetoId   String
+  projeto     Projeto   @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+  ambiente    String
+  createdAt   DateTime  @default(now())
+  // Nao nulo = lote arquivado (saiu da lista principal do Painel, mas continua no banco e pode
+  // ser desarquivado). Diferente de excluir: nao apaga pecas nem historico de bipagem.
+  arquivadoEm DateTime?
+  pecas       Peca[]
 
   @@unique([projetoId, ambiente])
 }

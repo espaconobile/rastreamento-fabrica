@@ -282,6 +282,27 @@ abre `app/lotes/[id]/pecas/[pecaId]/etiqueta/page.tsx` numa aba nova.
   deixando o botão no fluxo normal (`.no-print`, abaixo do preview da etiqueta), sem
   posicionamento fixo.
 
+## Arquivar lotes concluídos
+
+Lote arquivado (`Lote.arquivadoEm` não nulo) some da lista principal do Painel, mas continua
+intacto no banco — diferente de excluir, não apaga peças nem histórico de bipagem, e é
+reversível a qualquer momento (`ArquivarLoteButton`, `POST`/`DELETE`
+`app/api/lotes/[id]/arquivar/route.ts`). Lotes arquivados ficam em `/arquivados`, com link "Ver
+arquivados (N)" no Painel só quando existe pelo menos um.
+
+- **"Concluído" é só um indicador visual** (`app/page.tsx`: toda peça já bipada na última etapa
+  de produção), não uma trava — dá pra arquivar um lote incompleto se o usuário quiser (ex:
+  pedido cancelado), o selo só ajuda a decidir quando faz sentido arquivar.
+- **Sem confirmação pra arquivar/desarquivar** (ao contrário de excluir): decisão deliberada,
+  já que a ação é reversível e não destrói nada.
+- **Gotcha de deploy**: essa foi a primeira mudança de schema desde a migração pra Postgres
+  (`prisma/migrations/20260802160139_init`), e até então não havia nenhum passo automático
+  aplicando migrations em produção — só `postinstall: prisma generate`. Adicionado
+  `"vercel-build": "prisma migrate deploy && next build"` no `package.json`; a Vercel usa esse
+  script no lugar de `"build"` automaticamente quando ele existe, sem precisar de `vercel.json`.
+  Isso passa a valer pra **toda** mudança de schema futura, não só essa — não precisa mais rodar
+  `prisma migrate deploy` manualmente contra o banco de produção depois de um deploy.
+
 ## Deploy em produção (concluído em 2026-08-02)
 
 O sistema está publicado e acessível de qualquer lugar, sem depender do Wi-Fi da fábrica:

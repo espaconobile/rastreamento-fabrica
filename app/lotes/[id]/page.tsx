@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { calcularProgressoLote } from "@/lib/loteProgress";
 import ExcluirLoteButton from "@/app/components/ExcluirLoteButton";
+import ArquivarLoteButton from "@/app/components/ArquivarLoteButton";
 import AutoRefresh from "@/app/components/AutoRefresh";
 
 export default async function LoteDetailPage({
@@ -48,15 +49,23 @@ export default async function LoteDetailPage({
       <AutoRefresh />
       <h1 className="text-2xl font-semibold text-zinc-900">
         {lote.projeto.clienteNome} · {lote.ambiente}
+        {lote.arquivadoEm && (
+          <span className="ml-2 rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-500">
+            arquivado
+          </span>
+        )}
       </h1>
       <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-zinc-500">
           {lote.pecas.length} peças · {pilhas.size} pilhas (módulos)
         </p>
-        <ExcluirLoteButton
-          loteId={lote.id}
-          nomeLote={`${lote.projeto.clienteNome} · ${lote.ambiente}`}
-        />
+        <div className="flex items-center gap-4">
+          <ArquivarLoteButton loteId={lote.id} arquivado={!!lote.arquivadoEm} />
+          <ExcluirLoteButton
+            loteId={lote.id}
+            nomeLote={`${lote.projeto.clienteNome} · ${lote.ambiente}`}
+          />
+        </div>
       </div>
 
       <div className="mt-4 flex flex-wrap gap-6">
