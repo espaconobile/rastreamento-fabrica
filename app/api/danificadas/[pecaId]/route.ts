@@ -7,7 +7,7 @@ export async function DELETE(
 ) {
   const { pecaId } = await params;
 
-  const peca = await db.peca.findUnique({ where: { id: pecaId } });
+  const peca = await db.peca.findUnique({ where: { id: pecaId }, include: { lote: true } });
   if (!peca) {
     return NextResponse.json({ error: "Peça não encontrada." }, { status: 404 });
   }
@@ -36,6 +36,7 @@ export async function DELETE(
       comprimento: peca.comprimento,
       profundidade: peca.profundidade,
       chapaMaterial: peca.chapaMaterial,
+      ambiente: peca.lote.ambiente,
     },
     pilhaAvulsas,
   });

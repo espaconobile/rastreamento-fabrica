@@ -32,6 +32,7 @@ interface PecaInfo {
   comprimento: number | null;
   profundidade: number | null;
   chapaMaterial: string | null;
+  ambiente?: string;
 }
 
 type FeedbackTipo =
@@ -675,6 +676,15 @@ export default function BipagemClient({ etapas, clientes }: { etapas: Etapa[]; c
               {pilhaCompleta ? "Completa! Coloque esta última peça na" : "Coloque a peça na"}
             </span>
             <span className="text-6xl font-bold leading-none lg:text-[10rem]">Pilha {feedback.peca.pilha}</span>
+            {feedback.peca.ambiente && (
+              <span
+                className={`text-sm font-semibold uppercase tracking-wide lg:text-2xl ${
+                  pilhaCompleta ? "text-green-100" : "text-blue-100"
+                }`}
+              >
+                {feedback.peca.ambiente}
+              </span>
+            )}
             {feedback.pilhaAvulsas && (
               <span className="mt-1 rounded-md bg-white/20 px-3 py-1 font-mono text-2xl font-bold lg:mt-2 lg:px-6 lg:py-2 lg:text-5xl">
                 Peça {feedback.peca.codigo}

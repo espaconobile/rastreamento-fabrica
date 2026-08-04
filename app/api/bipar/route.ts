@@ -144,6 +144,7 @@ export async function POST(request: NextRequest) {
       comprimento: peca.comprimento,
       profundidade: peca.profundidade,
       chapaMaterial: peca.chapaMaterial,
+      ambiente: peca.lote.ambiente,
     },
     lote: { id: peca.loteId },
     progresso: { totalNaEtapa, totalNoLote },
