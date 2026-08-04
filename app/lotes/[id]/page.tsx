@@ -130,11 +130,9 @@ export default async function LoteDetailPage({
                       className={danificada ? "bg-rose-50" : temAlerta ? "bg-amber-50" : undefined}
                     >
                       <td className="px-3 py-2 text-zinc-600">
-                        {modulosDistintos.size > 1 && (
-                          <span className="mr-1.5 rounded bg-zinc-100 px-1.5 py-0.5 font-mono text-xs text-zinc-500">
-                            {peca.codigo}
-                          </span>
-                        )}
+                        <span className="mr-1.5 rounded bg-zinc-100 px-1.5 py-0.5 font-mono text-xs text-zinc-500">
+                          {peca.codigo}
+                        </span>
                         {peca.descricaoPeca}
                       </td>
                       <td className="px-3 py-2 text-zinc-500">

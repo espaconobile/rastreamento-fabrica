@@ -705,7 +705,7 @@ export default function BipagemClient({ etapas, clientes }: { etapas: Etapa[]; c
               <p className="text-base font-semibold lg:text-4xl">{feedback.mensagem}</p>
               {feedback.peca && (
                 <p className="mt-1 text-sm lg:mt-3 lg:text-2xl">
-                  Módulo {feedback.peca.moduloCodigo} · {feedback.peca.descricaoPeca}
+                  Módulo {feedback.peca.moduloCodigo} · {feedback.peca.codigo} · {feedback.peca.descricaoPeca}
                   {feedback.peca.comprimento && feedback.peca.profundidade && (
                     <> · {feedback.peca.comprimento} x {feedback.peca.profundidade}</>
                   )}
