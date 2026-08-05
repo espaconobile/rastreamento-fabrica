@@ -60,12 +60,22 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const projeto = await db.projeto.create({
-    data: {
-      clienteNome: parsed.clienteNome || "Não identificado",
-      nomeArquivoOrigem: fileName,
-    },
+  const clienteNome = parsed.clienteNome || "Não identificado";
+
+  // Reaproveita o Projeto do mesmo cliente se ja existir, em vez de sempre criar um novo — assim
+  // reimportar um Etiquetas.pdf corrigido/complementar (ex: a primeira importacao ficou
+  // incompleta) atualiza os lotes/pecas existentes em vez de duplicar tudo, o que perderia o
+  // historico de bipagem ja registrado nas pecas antigas (elas ficariam presas num Projeto/Lote
+  // orfao enquanto o Painel passaria a mostrar um lote novo, zerado, pro mesmo cliente/ambiente).
+  let projeto = await db.projeto.findFirst({
+    where: { clienteNome },
+    orderBy: { dataImportacao: "desc" },
   });
+  if (projeto) {
+    await db.projeto.update({ where: { id: projeto.id }, data: { nomeArquivoOrigem: fileName } });
+  } else {
+    projeto = await db.projeto.create({ data: { clienteNome, nomeArquivoOrigem: fileName } });
+  }
 
   const porAmbiente = new Map<string, PecaExtraida[]>();
   for (const peca of parsed.pecas) {
@@ -78,14 +88,30 @@ export async function POST(request: NextRequest) {
     loteId: string;
     ambiente: string;
     total: number;
+    novas: number;
+    atualizadas: number;
     ignoradas: number;
     pilhas: number;
   }[] = [];
 
   for (const [ambiente, pecasDoLote] of porAmbiente) {
-    const lote = await db.lote.create({
-      data: { projetoId: projeto.id, ambiente },
+    // Mesmo raciocinio do Projeto acima: reaproveita o lote existente (mesmo cliente + ambiente)
+    // em vez de criar um novo, preservando o id do lote e, por tabela, o historico de bipagem das
+    // pecas que ja existiam nele.
+    const lote = await db.lote.upsert({
+      where: { projetoId_ambiente: { projetoId: projeto.id, ambiente } },
+      update: {},
+      create: { projetoId: projeto.id, ambiente },
     });
+
+    // Snapshot de quais codigos ja existiam neste lote ANTES desta importacao, so pra reportar
+    // ao usuario quantas pecas eram novas vs. ja existentes (ver resumoLotes abaixo) — nao afeta
+    // a logica de gravacao em si (o upsert de peca cuida disso sozinho).
+    const codigosExistentes = new Set(
+      (await db.peca.findMany({ where: { loteId: lote.id }, select: { codigo: true } })).map(
+        (p) => p.codigo
+      )
+    );
 
     // Um modulo so tem sentido de agrupamento fisico quando tem mais de uma peca; quando o
     // modulo tem uma unica peca no lote, ela nao esta de fato vinculada a nenhuma outra peca
@@ -110,23 +136,31 @@ export async function POST(request: NextRequest) {
     }
 
     let ignoradas = 0;
+    let novas = 0;
+    let atualizadas = 0;
     for (const peca of pecasDoLote) {
+      const dados = {
+        chapaNum: peca.chapaNum,
+        posicaoNoNesting: peca.posicaoNoNesting,
+        moduloCodigo: peca.moduloCodigo,
+        pilha: pilhaPorChave.get(chavePilha(peca))!,
+        descricaoPeca: peca.descricaoPeca,
+        comprimento: peca.comprimento,
+        profundidade: peca.profundidade,
+        espessura: peca.espessura,
+        chapaMaterial: peca.chapaMaterial,
+      };
       try {
-        await db.peca.create({
-          data: {
-            loteId: lote.id,
-            codigo: peca.codigo,
-            chapaNum: peca.chapaNum,
-            posicaoNoNesting: peca.posicaoNoNesting,
-            moduloCodigo: peca.moduloCodigo,
-            pilha: pilhaPorChave.get(chavePilha(peca))!,
-            descricaoPeca: peca.descricaoPeca,
-            comprimento: peca.comprimento,
-            profundidade: peca.profundidade,
-            espessura: peca.espessura,
-            chapaMaterial: peca.chapaMaterial,
-          },
+        // upsert em vez de create: se a peca ja existia neste lote (mesmo codigo, de uma
+        // importacao anterior), atualiza os dados dela em vez de duplicar — o id (e o historico
+        // de bipagem que referencia esse id) e preservado.
+        await db.peca.upsert({
+          where: { loteId_codigo: { loteId: lote.id, codigo: peca.codigo } },
+          update: dados,
+          create: { loteId: lote.id, codigo: peca.codigo, ...dados },
         });
+        if (codigosExistentes.has(peca.codigo)) atualizadas++;
+        else novas++;
       } catch {
         ignoradas++;
       }
@@ -136,6 +170,8 @@ export async function POST(request: NextRequest) {
       loteId: lote.id,
       ambiente,
       total: pecasDoLote.length - ignoradas,
+      novas,
+      atualizadas,
       ignoradas,
       pilhas: pilhaPorChave.size,
     });

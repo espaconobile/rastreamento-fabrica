@@ -231,6 +231,34 @@ O iPhone tem duas restrições que o Android/Chrome não têm, ambas relevantes 
 - Seccionadora de cortes avulsos como etapa própria.
 - Alertas de peça "parada há muito tempo" numa etapa.
 
+## Reimportação de Etiquetas.pdf (mesmo cliente/ambiente)
+
+Antes, toda importação criava um `Projeto` e `Lote`s novos, sempre — reimportar um PDF (ex:
+corrigir/completar uma primeira importação que ficou faltando peça) duplicava tudo: o cliente
+ficava com dois `Projeto`s, e o ambiente repetido virava um segundo `Lote` zerado, sem nenhuma
+bipagem, enquanto o histórico de bipagem real ficava "preso" no `Lote` antigo e órfão. Corrigido
+em `app/api/importar/route.ts`:
+
+- **`Projeto` é reaproveitado por `clienteNome`** (`findFirst` + `update`, criando só se não
+  existir) em vez de sempre `create`. Se por acaso já existir mais de um `Projeto` com o mesmo
+  nome (de antes desta correção), reaproveita o mais recente (`orderBy: dataImportacao desc`).
+- **`Lote` é reaproveitado por `(projetoId, ambiente)`** via `upsert` em vez de `create`.
+- **`Peca` é reaproveitada por `(loteId, codigo)`** via `upsert`: se o código já existia neste
+  lote, atualiza os campos (módulo, descrição, dimensões, chapa) mas mantém o mesmo `id` — e por
+  tabela, o `Bipagem` que referencia esse `id` continua intacto. Só cria `Peca` nova pra código
+  que ainda não existia no lote.
+- **Pilha é recalculada do zero a cada importação**, com base só nas peças do PDF que está sendo
+  importado agora (mesmo algoritmo de sempre) — pensado para o caso real que motivou a mudança:
+  o PDF reimportado é a versão corrigida/completa, ou seja, um **superset** do que já tinha sido
+  importado antes. Uma peça que existia no banco só de uma importação antiga e não aparece mais
+  no PDF atual (situação que não deveria acontecer no uso normal) fica com a pilha antiga,
+  intocada — não participa do recálculo. Se um dia isso passar a acontecer de verdade, essa
+  peça pode ficar com um número de pilha que não bate mais com o resto do lote.
+- O resumo da importação (`resultado.lotes[].novas`/`.atualizadas`, exibido em
+  `app/importar/page.tsx`) mostra quantas peças eram novas vs. já existentes quando o lote
+  reaproveitado tinha pelo menos uma peça atualizada — sinal visual de que foi uma reimportação
+  e não uma primeira importação.
+
 ## Pilhas de peças "soltas" (avulsas)
 
 Peças cujo módulo aparece com **apenas 1 peça** naquele lote não têm de fato nenhum outro

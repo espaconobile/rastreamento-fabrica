@@ -8,6 +8,8 @@ interface ResumoLote {
   loteId: string;
   ambiente: string;
   total: number;
+  novas: number;
+  atualizadas: number;
   ignoradas: number;
   pilhas: number;
 }
@@ -250,6 +252,12 @@ export default function ImportarPage() {
                 <span className="font-medium text-zinc-800">{lote.ambiente}</span>
                 <span className="text-zinc-500">
                   {lote.total} peças · {lote.pilhas} pilhas (módulos)
+                  {lote.atualizadas > 0 && (
+                    <span className="text-blue-600">
+                      {" "}
+                      · lote já existia: {lote.novas} nova(s), {lote.atualizadas} atualizada(s)
+                    </span>
+                  )}
                   {lote.ignoradas > 0 && (
                     <span className="text-amber-600"> · {lote.ignoradas} ignorada(s)</span>
                   )}
