@@ -31,6 +31,23 @@ export default async function HomePage() {
 
   const totalArquivados = await db.lote.count({ where: { arquivadoEm: { not: null } } });
 
+  // Agrupa por cliente pra nao misturar os lotes de clientes diferentes numa lista so (ficava
+  // confuso depois de algumas importacoes). Como "lotes" ja vem ordenado por createdAt desc, o
+  // Map preserva essa ordem entre os grupos: o cliente com a importacao mais recente aparece
+  // primeiro. Dentro de cada cliente, os ambientes ficam em ordem alfabetica (numerica-aware,
+  // pra "10_QUARTO" nao vir antes de "2_SALA") em vez da ordem de chegada.
+  const gruposPorCliente = new Map<string, typeof lotes>();
+  for (const lote of lotes) {
+    const lista = gruposPorCliente.get(lote.projeto.clienteNome) ?? [];
+    lista.push(lote);
+    gruposPorCliente.set(lote.projeto.clienteNome, lista);
+  }
+  for (const lotesDoCliente of gruposPorCliente.values()) {
+    lotesDoCliente.sort((a, b) =>
+      a.ambiente.localeCompare(b.ambiente, "pt-BR", { numeric: true, sensitivity: "base" })
+    );
+  }
+
   // Painel global de pecas danificadas: reune de todos os clientes/lotes de uma vez, pra quem
   // esta olhando o monitor/TV do chao de fabrica ver na hora o que precisa ser refeito, sem
   // precisar abrir lote por lote ou estar bipando um cliente especifico (ver app/bipar, que tem a
@@ -99,68 +116,74 @@ export default async function HomePage() {
         </p>
       )}
 
-      <div className="mt-6 grid grid-cols-1 gap-4 lg:mt-10 lg:grid-cols-[repeat(auto-fit,minmax(420px,1fr))] lg:items-start lg:gap-6">
-        {lotes.map((lote) => {
-          const total = lote.pecas.length;
-          const progresso = calcularProgressoLote(lote.pecas, etapasProducao);
-          const danificadas = lote.pecas.filter((p) =>
-            p.bipagens.some((b) => excecaoIds.has(b.etapaId))
-          ).length;
-          // Concluido = toda peca ja passou pela ultima etapa de producao (Separacao). So um
-          // indicador visual pra ajudar a decidir quando arquivar — nao bloqueia nem exige nada.
-          const ultimaEtapa = progresso[progresso.length - 1];
-          const concluido = total > 0 && ultimaEtapa?.concluidas === total;
+      <div className="mt-6 flex flex-col gap-8 lg:mt-10 lg:gap-14">
+        {[...gruposPorCliente.entries()].map(([clienteNome, lotesDoCliente]) => (
+          <section key={clienteNome}>
+            <h2 className="text-lg font-semibold text-zinc-700 lg:text-3xl">{clienteNome}</h2>
+            <div className="mt-3 grid grid-cols-1 gap-4 lg:mt-5 lg:grid-cols-[repeat(auto-fit,minmax(420px,1fr))] lg:items-start lg:gap-6">
+              {lotesDoCliente.map((lote) => {
+                const total = lote.pecas.length;
+                const progresso = calcularProgressoLote(lote.pecas, etapasProducao);
+                const danificadas = lote.pecas.filter((p) =>
+                  p.bipagens.some((b) => excecaoIds.has(b.etapaId))
+                ).length;
+                // Concluido = toda peca ja passou pela ultima etapa de producao (Separacao). So
+                // um indicador visual pra ajudar a decidir quando arquivar — nao bloqueia nem
+                // exige nada.
+                const ultimaEtapa = progresso[progresso.length - 1];
+                const concluido = total > 0 && ultimaEtapa?.concluidas === total;
 
-          return (
-            <Link
-              key={lote.id}
-              href={`/lotes/${lote.id}`}
-              className="block rounded-lg border border-zinc-200 p-4 transition-colors hover:border-blue-300 lg:rounded-2xl lg:border-2 lg:p-7"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="font-medium text-zinc-900 lg:text-2xl">
-                  {lote.projeto.clienteNome} · {lote.ambiente}
-                </p>
-                <div className="flex items-center gap-3">
-                  {concluido && (
-                    <p className="text-xs font-medium text-green-600 lg:text-lg">
-                      ✓ concluído
-                    </p>
-                  )}
-                  {danificadas > 0 && (
-                    <p className="text-xs font-medium text-rose-600 lg:text-lg">
-                      ⚠ {danificadas} danificada{danificadas > 1 ? "s" : ""}
-                    </p>
-                  )}
-                  <p className="text-xs text-zinc-500 lg:text-lg">{total} peças</p>
-                </div>
-              </div>
-              <div className="mt-2 flex justify-end gap-4">
-                <ArquivarLoteButton loteId={lote.id} arquivado={false} />
-                <ExcluirLoteButton
-                  loteId={lote.id}
-                  nomeLote={`${lote.projeto.clienteNome} · ${lote.ambiente}`}
-                />
-              </div>
-              <div className="mt-3 flex flex-col gap-1.5 lg:mt-5 lg:gap-3">
-                {progresso.map((et) => (
-                  <div key={et.etapaId} className="flex items-center gap-2 text-xs lg:gap-4 lg:text-lg">
-                    <span className="w-44 shrink-0 text-zinc-600 lg:w-64">{et.nome}</span>
-                    <div className="h-2 flex-1 rounded-full bg-zinc-100 lg:h-4">
-                      <div
-                        className="h-2 rounded-full bg-blue-600 lg:h-4"
-                        style={{ width: `${total ? (et.concluidas / total) * 100 : 0}%` }}
+                return (
+                  <Link
+                    key={lote.id}
+                    href={`/lotes/${lote.id}`}
+                    className="block rounded-lg border border-zinc-200 p-4 transition-colors hover:border-blue-300 lg:rounded-2xl lg:border-2 lg:p-7"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p className="font-medium text-zinc-900 lg:text-2xl">{lote.ambiente}</p>
+                      <div className="flex items-center gap-3">
+                        {concluido && (
+                          <p className="text-xs font-medium text-green-600 lg:text-lg">
+                            ✓ concluído
+                          </p>
+                        )}
+                        {danificadas > 0 && (
+                          <p className="text-xs font-medium text-rose-600 lg:text-lg">
+                            ⚠ {danificadas} danificada{danificadas > 1 ? "s" : ""}
+                          </p>
+                        )}
+                        <p className="text-xs text-zinc-500 lg:text-lg">{total} peças</p>
+                      </div>
+                    </div>
+                    <div className="mt-2 flex justify-end gap-4">
+                      <ArquivarLoteButton loteId={lote.id} arquivado={false} />
+                      <ExcluirLoteButton
+                        loteId={lote.id}
+                        nomeLote={`${clienteNome} · ${lote.ambiente}`}
                       />
                     </div>
-                    <span className="w-14 shrink-0 text-right text-zinc-500 lg:w-24">
-                      {et.concluidas}/{total}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </Link>
-          );
-        })}
+                    <div className="mt-3 flex flex-col gap-1.5 lg:mt-5 lg:gap-3">
+                      {progresso.map((et) => (
+                        <div key={et.etapaId} className="flex items-center gap-2 text-xs lg:gap-4 lg:text-lg">
+                          <span className="w-44 shrink-0 text-zinc-600 lg:w-64">{et.nome}</span>
+                          <div className="h-2 flex-1 rounded-full bg-zinc-100 lg:h-4">
+                            <div
+                              className="h-2 rounded-full bg-blue-600 lg:h-4"
+                              style={{ width: `${total ? (et.concluidas / total) * 100 : 0}%` }}
+                            />
+                          </div>
+                          <span className="w-14 shrink-0 text-right text-zinc-500 lg:w-24">
+                            {et.concluidas}/{total}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        ))}
       </div>
     </div>
   );
