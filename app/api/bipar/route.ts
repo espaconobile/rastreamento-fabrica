@@ -26,11 +26,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: "ERRO", mensagem: "Etapa inválida." }, { status: 400 });
   }
 
-  // O mesmo codigo pode, raramente, existir em mais de um lote (identificadores do Promob nao
-  // sao 100% globalmente unicos). Se houver ambiguidade e nenhum loteId foi informado para
-  // desambiguar, devolvemos os candidatos para o operador escolher manualmente.
+  // O mesmo codigo pode, raramente, se repetir entre ambientes diferentes de um MESMO cliente
+  // (identificadores do Promob nao sao 100% unicos dentro do cliente todo, so dentro de um
+  // lote/ambiente). Por isso a busca sempre escopa pelo cliente ja selecionado na sessao de
+  // bipagem — sem isso, um codigo que colidisse por coincidencia com o de OUTRO cliente also
+  // aparecia como candidato, criando ambiguidade (ou pior, risco de misturar peca de um cliente
+  // com o historico de outro) que nao faz sentido: o operador so pode estar bipando peca do
+  // cliente configurado na tela. Se ainda houver mais de um candidato dentro do mesmo cliente
+  // (dois ambientes com o mesmo codigo) e nenhum loteId foi informado para desambiguar,
+  // devolvemos os candidatos para o operador escolher manualmente.
   const candidatos = await db.peca.findMany({
-    where: { codigo, ...(body.loteId ? { loteId: body.loteId } : {}) },
+    where: {
+      codigo,
+      lote: { projeto: { clienteNome } },
+      ...(body.loteId ? { loteId: body.loteId } : {}),
+    },
     include: { lote: { include: { projeto: true } } },
   });
 
