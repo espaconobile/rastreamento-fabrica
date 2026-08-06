@@ -137,7 +137,11 @@ export default async function HomePage() {
                   <Link
                     key={lote.id}
                     href={`/lotes/${lote.id}`}
-                    className="block rounded-lg border border-zinc-200 p-4 transition-colors hover:border-blue-300 lg:rounded-2xl lg:border-2 lg:p-7"
+                    className={`block rounded-lg border p-4 transition-colors lg:rounded-2xl lg:border-2 lg:p-7 ${
+                      concluido
+                        ? "border-green-300 bg-green-50 hover:border-green-400"
+                        : "border-zinc-200 hover:border-blue-300"
+                    }`}
                   >
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <p className="font-medium text-zinc-900 lg:text-2xl">{lote.ambiente}</p>
