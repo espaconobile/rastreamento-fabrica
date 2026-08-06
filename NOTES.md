@@ -294,11 +294,20 @@ abre `app/lotes/[id]/pecas/[pecaId]/etiqueta/page.tsx` numa aba nova.
   `app/api/importar/route.ts`, `del(blobUrl, ...)`) — só os campos extraídos ficam no banco. Essa
   tela gera uma etiqueta **nova** a partir desses campos (cliente, ambiente, módulo, descrição,
   dimensões, chapa, código), não uma cópia fiel do layout do Promob.
-- **Código de barras gerado com `jsbarcode`** (`app/components/EtiquetaPrintView.tsx`), formato
-  `CODE128` desenhado num `<svg>` via `useEffect` (client component — a lib manipula o DOM
-  diretamente, não dá pra rodar no server). Decisão explícita do usuário confirmar que a fábrica
-  usa uma **impressora térmica de rolo 100x50mm**, não impressora comum — daí o tamanho fixo da
-  etiqueta em vez de deixar a impressora decidir.
+- **Código de barras gerado com `jsbarcode`** (`app/components/EtiquetaPrintView.tsx`), desenhado
+  num `<svg>` via `useEffect` (client component — a lib manipula o DOM diretamente, não dá pra
+  rodar no server). Decisão explícita do usuário confirmar que a fábrica usa uma **impressora
+  térmica de rolo 100x50mm**, não impressora comum — daí o tamanho fixo da etiqueta em vez de
+  deixar a impressora decidir.
+  - **Gotcha confirmado em teste real (iPhone)**: a primeira versão usava `format: "CODE128"`
+    com `margin: 0` — a câmera (via zbar-wasm, mesmo pipeline da bipagem normal) não conseguiu
+    ler esse código **nem impresso** de verdade na impressora térmica, só digitando manualmente.
+    Trocado para **`format: "CODE39"`** com `margin: 10` e `width: 2.5` (quiet zone real em volta
+    das barras, em vez de zero) — testado e confirmado lendo normalmente no mesmo dispositivo.
+    CODE39 é mais simples/tolerante pra leitura via câmera que CODE128, ao custo de um código um
+    pouco mais largo pro mesmo conteúdo (irrelevante aqui, é só dígitos curtos). Se um dia
+    precisar trocar o formato de novo, **testar em dispositivo real antes de considerar pronto**
+    — não basta a etiqueta parecer certa na tela.
 - **CSS de impressão com página nomeada** (`app/globals.css`, `@page etiqueta { size: 100mm 50mm;
   margin: 0 }` + `.pagina-etiqueta { page: etiqueta }`). Página nomeada foi usada em vez de mudar
   o `@page` padrão pra não afetar a impressão de outras telas do app (nenhuma outra tela é

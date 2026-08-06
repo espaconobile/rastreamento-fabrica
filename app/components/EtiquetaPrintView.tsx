@@ -25,10 +25,16 @@ export default function EtiquetaPrintView({ peca }: { peca: EtiquetaData }) {
 
   useEffect(() => {
     if (barcodeRef.current) {
+      // CODE39 em vez de CODE128: no teste em dispositivo real, a camera (via zbar-wasm) nao
+      // conseguiu ler um codigo CODE128 gerado por esta etiqueta, nem impresso — CODE39 e um
+      // formato mais simples/tolerante pra leitura via camera. Mantem uma margem de quiet-zone
+      // real (jsbarcode com margin:0 nao deixa nenhuma folga propria em volta das barras, o que
+      // pode prejudicar a deteccao das bordas do codigo pelo scanner).
       JsBarcode(barcodeRef.current, peca.codigo, {
-        format: "CODE128",
+        format: "CODE39",
         displayValue: false,
-        margin: 0,
+        margin: 10,
+        width: 2.5,
         height: 50,
       });
     }
