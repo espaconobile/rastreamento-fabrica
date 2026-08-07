@@ -46,4 +46,9 @@ next-env.d.ts
 /prisma/dev.db-journal
 dev-server.log
 
+# arquivos de teste (Etiquetas.pdf, Cut_Pro.csv) que o usuario solta na raiz pra teste manual —
+# contem dados reais de projetos de clientes, nao devem ir pro repositorio
+*.csv
+*.pdf
+
 .vercel
